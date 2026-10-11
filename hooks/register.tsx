@@ -26,6 +26,12 @@ const ICONS = {
   text: { idle: '♫', playing: '♫', paused: '‖', loading: '…' },
 } as const
 const icon = (state: 'idle' | 'playing' | 'paused' | 'loading') => ICONS[str('icons', 'nerd') === 'text' ? 'text' : 'nerd'][state]
+/** Button glyphs, Nerd Font media controls or their plain-text stand-ins. */
+const BUTTONS = {
+  nerd: { play: '\u{F040A}', pause: '\u{F03E4}', stop: '\u{F04DB}', back: '\u{F04AE}', forward: '\u{F04AD}', slower: '\u{F0374}', faster: '\u{F0415}', restart: '\u{F0450}' },
+  text: { play: '▶', pause: '‖', stop: '■', back: '«', forward: '»', slower: '−', faster: '+', restart: '⟲' },
+} as const
+const btn = (name: keyof (typeof BUTTONS)['text']) => BUTTONS[str('icons', 'nerd') === 'text' ? 'text' : 'nerd'][name]
 const stateOf = (status: ReadAloudStatus) => (status.state === 'paused' ? 'paused' : status.state === 'loading' ? 'loading' : 'playing')
 const DUCK_LEVELS = ['off', '50%', '30%', '15%']
 /** Other apps' volume while reading, as a fraction of their own: `30%` → 0.3, `off` → 1. */
@@ -422,12 +428,12 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
 
   const controls = (
     <Box key={`${id}-controls`} columnGap={1}>
-      <Button key={`${id}-play`} label={isPlaying ? '‖' : '▶'} onPress={() => (isThis ? control($, 'toggle') : speak($, text, key, label, 'now'))} />
-      <Button key={`${id}-restart`} label="⟲" onPress={() => (isThis ? control($, 'restart') : speak($, text, key, label, 'now'))} />
-      {isThis ? [<Button key={`${id}-stop`} label="■" onPress={() => control($, 'stop')} />] : []}
-      <Button key={`${id}-slower`} label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
+      <Button key={`${id}-play`} label={isPlaying ? btn('pause') : btn('play')} onPress={() => (isThis ? control($, 'toggle') : speak($, text, key, label, 'now'))} />
+      <Button key={`${id}-restart`} label={btn('restart')} onPress={() => (isThis ? control($, 'restart') : speak($, text, key, label, 'now'))} />
+      {isThis ? [<Button key={`${id}-stop`} label={btn('stop')} onPress={() => control($, 'stop')} />] : []}
+      <Button key={`${id}-slower`} label={btn('slower')} onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
       <Text dimColor>{s.speed}×</Text>
-      <Button key={`${id}-faster`} label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
+      <Button key={`${id}-faster`} label={btn('faster')} onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
       <Button key={`${id}-voice`} label={voiceName(s.voice)} onPress={() => nextVoice($)} />
     </Box>
   )
@@ -566,12 +572,12 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
             {queued}
           </Text>
         </Text>
-        <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '‖'} onPress={() => control($, 'toggle')} />
-        <Button key="stop" hotkey="s" label="■" onPress={() => control($, 'stop')} />
-        <Button key="back" hotkey="b" label="«" onPress={() => control($, 'back')} />
-        <Button key="forward" hotkey="n" label="»" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
-        <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
-        <Button key="faster" label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
+        <Button key="toggle" hotkey="p" label={isPaused ? btn('play') : btn('pause')} onPress={() => control($, 'toggle')} />
+        <Button key="stop" hotkey="s" label={btn('stop')} onPress={() => control($, 'stop')} />
+        <Button key="back" hotkey="b" label={btn('back')} onPress={() => control($, 'back')} />
+        <Button key="forward" hotkey="n" label={btn('forward')} onPress={() => control($, status.queue ? 'skip' : 'forward')} />
+        <Button key="slower" label={btn('slower')} onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
+        <Button key="faster" label={btn('faster')} onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
       </Box>
     </Box>
   )
