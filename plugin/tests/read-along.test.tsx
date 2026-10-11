@@ -171,7 +171,7 @@ test('a mod that hides the band is noticed, once a session', { plugins: [bandHog
   expect(toasts.filter(t => t.includes('another mod hides the player')).length).toBe(1)
 })
 
-test('a band passed on is not reported', async ($, on) => {
+test('a band passed on is not reported, and the check redraws no message', async ($, on) => {
   const clock = mock.clock(on)
   mock.env(on, { USER: 'tester' })
   const toasts: string[] = []
@@ -181,13 +181,20 @@ test('a band passed on is not reported', async ($, on) => {
   })
   on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ state: 'idle', queue: 0 }) } }))
-  on('ui.render', () => ({ type: 'engine', ref: 0 }))
+  let messageDraws = 0
+  on('ui.render', (_, e) => {
+    if (e.component === 'AssistantMessage') messageDraws += 1
+    return { type: 'engine', ref: 0 }
+  })
   on('session.start', async ($, e) => ({ cwd: e.cwd }))
   on('command.register', async ($, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
   await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120 } as never })
   await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'PromptHint', props: { isDraft: false, isWorking: false, hint: '? for shortcuts' } as never })
+  await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'AssistantMessage', props: REPLY, requestId: 'm9' })
+  const before = messageDraws
   await clock.advance(3500)
   await clock.advance(2000)
   expect(toasts).toEqual([])
+  expect(messageDraws).toBe(before)
 })

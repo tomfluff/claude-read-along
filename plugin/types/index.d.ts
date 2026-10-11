@@ -66,6 +66,8 @@ declare module 'claude-code' {
       /** The voice group whose full list the settings pane shows. */
       browsing: string | null
       voices: ReadAlongVoice[] | null
+      /** Bumped to redraw only the band and the hint line, for the check that another mod hides the band. */
+      bandCheck: number
     }
   }
 }

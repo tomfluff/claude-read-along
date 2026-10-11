@@ -16,6 +16,7 @@ const cursor = atom({ plugin: 'read-along', key: 'cursor' } as const, null)
 const machine = atom({ plugin: 'read-along', key: 'info' } as const, null)
 const browsing = atom({ plugin: 'read-along', key: 'browsing' } as const, null)
 const installed = atom({ plugin: 'read-along', key: 'voices' } as const, null)
+const bandCheck = atom({ plugin: 'read-along', key: 'bandCheck' } as const, 0)
 
 const PANE = 'read-along'
 const SPEED_STEP = 0.25
@@ -133,9 +134,11 @@ const bottomKind = () => (playerAt() === 'message' ? 'none' : playerAt() === 'hi
  * draw in turn, in \`enabledPlugins\` order, and a mod listed before
  * read-along that draws its own band without passing it on keeps read-along's
  * hook from running at all, so read-along can't see it from inside the hook.
- * Instead, after the session starts and after each turn, the clock asks for a
- * redraw and watches which of read-along's hooks run: the hint line under the
- * prompt without the band means the band is taken. The player then shows on
+ * Instead, after the session starts and after each turn, the clock redraws
+ * the band and the hint line (bumping \`bandCheck\`, which only those two
+ * read: \`$.ui.invalidate\` would redraw every message's buttons too, the
+ * transcript jitter again) and watches which of read-along's hooks run: the
+ * hint line under the prompt without the band means the band is taken. The player then shows on
  * the hint line meanwhile, and a toast says so, once a session.
  */
 const band = {
@@ -154,21 +157,22 @@ const checkBandSoon = () => {
 const hidesBand = () => bottomKind() === 'band' && band.isHidden === true
 
 /** One step of the check, from the clock. */
-function checkBand($: $) {
+async function checkBand($: $) {
   if (band.startTick === 0) {
     if (!band.dueTick || ticks < band.dueTick || bottomKind() !== 'band') return
     band.dueTick = 0
     band.startTick = ticks
     band.sawBand = band.sawHint = false
-    $.ui.invalidate('ui.render')
+    await update($, bandCheck, n => n + 1)
     return
   }
   if (ticks - band.startTick < 4) return // about 1.5 s for the redraw
   band.startTick = 0
   if (!band.sawHint) return // no prompt drawn in the terminal: nothing to tell
   const isHidden = !band.sawBand
-  if (isHidden !== band.isHidden) $.ui.invalidate('ui.render') // the hint line takes the player, or gives it back
+  const isChanged = isHidden !== band.isHidden
   band.isHidden = isHidden
+  if (isChanged) await update($, bandCheck, n => n + 1) // the hint line takes the player, or gives it back
   if (isHidden && !band.isToasted) {
     band.isToasted = true
     $.ui.toast(
@@ -284,7 +288,7 @@ function poll() {
 
 async function tick($: $) {
   ticks += 1
-  checkBand($)
+  await checkBand($)
   if (!isActive && ticks % 8 !== 0) return
   try {
     const res = await $.http.fetch('http://speakd/status', { socketPath: await sock($) })
@@ -966,6 +970,7 @@ export const register: Register = (on, options) => {
   // should drawing the player fail, the .catch below hands theirs on alone.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     saw(e)
+    await read($, bandCheck) // so the band check redraws this, and only this and the hint line
     if (e.surface === 'terminal') band.sawBand = true
     if (e.props.hasSurvey || bottomKind() !== 'band') return next(e)
     const others = await next(e)
@@ -985,6 +990,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     saw(e)
+    await read($, bandCheck)
     if (e.surface === 'terminal') band.sawHint = true
     // The hint line also carries the player while another mod hides the band.
     if (bottomKind() !== 'hint' && !hidesBand()) return next(e)
