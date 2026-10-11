@@ -587,21 +587,16 @@ export const register: Register = (on, options) => {
     return done
   })
 
-  on('session.append', async ($, e, next) => {
-    const stored = await next(e)
-    if (e.door === 'response' && e.agentId === undefined && (await settings($)).autoReadReplies === 'all') {
-      const content = e.message.content
-      const blocks: string[] =
-        typeof content === 'string'
-          ? [content]
-          : content.flatMap(b => {
-              const text = (b as { type?: unknown; text?: unknown }).text
-              return b.type === 'text' && typeof text === 'string' ? [text] : []
-            })
-      for (const text of blocks) await speak($, text, messageKey('a', text), 'reply', 'queue')
+  // `all`: read each model step's visible text as the step ends, the short
+  // updates written just before a tool call included. Those never reach the
+  // transcript as their own rows, so listening to session.append missed them.
+  on('turn.step', async function* ($, e, next) {
+    const step = yield* next(e)
+    if (e.agentId === undefined && step.answer.trim() && (await settings($)).autoReadReplies === 'all') {
+      await speak($, step.answer, messageKey('a', step.answer), 'reply', 'queue')
     }
-    return stored
-  }).catch(($, e, next) => next(e))
+    return step
+  })
 
   on('command.run', { command: 'read-aloud' }, async ($, e) => {
     const [verb = '', ...rest] = e.args.trim().split(/\s+/).filter(Boolean)
