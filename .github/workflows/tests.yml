@@ -26,6 +26,13 @@ jobs:
         run: python -I plugin/bin/speakd.py --doctor
       - name: Make speech with this machine's voice
         run: python -I plugin/tests/smoke.py
-      - name: Japanese and Hebrew voices (macOS)
+      - name: The voice auto picks per language (macOS)
         if: runner.os == 'macOS'
-        run: python -I -c "import sys; sys.path.insert(0, 'plugin/bin'); from engines import Engines; e = Engines(); print({g: e.auto(g) for g in ('main', 'ja', 'he', 'zh', 'ko')})"
+        run: |
+          python -I -c "
+          import sys; sys.path.insert(0, 'plugin/bin')
+          from engines import Engines
+          e = Engines()
+          for g in ('main', 'ja', 'he', 'zh', 'ko'):
+              print(g, e.auto(g))
+          "
