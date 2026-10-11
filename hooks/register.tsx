@@ -370,8 +370,10 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
   const hl = str('highlightColor', '#f1fa8c')
   const fg = str('highlightTextColor', '#282a36')
 
+  // marginTop: the engine draws each message with a blank row above it; without
+  // it, a message being read sat flush against the one before until reading ended.
   return (
-    <Box flexDirection="row">
+    <Box flexDirection="row" marginTop={1}>
       <Text>{lead}</Text>
       <Box flexDirection="column" flexGrow={1} flexShrink={1}>
         {before ? [<Markdown text={before} />] : []}
