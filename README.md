@@ -22,6 +22,20 @@ Claude explains something. It is not a screen reader and doesn't replace one.
   sent anywhere.
 - **Fast without chipmunk voices.** Speeds up to 4× keep the voice's pitch.
 
+## Hear it
+
+Kokoro voices, made with read-along's own setup on a laptop CPU. Each link
+opens a short MP3.
+
+| Voice | Language | Sample |
+|---|---|---|
+| `kokoro:af_heart` | English (US) | [listen](docs/samples/en-us-heart.mp3) · [at 2× speed](docs/samples/en-us-heart-2x.mp3) |
+| `kokoro:am_fenrir` | English (US) | [listen](docs/samples/en-us-fenrir.mp3) |
+| `kokoro:bf_emma` | English (UK) | [listen](docs/samples/en-uk-emma.mp3) |
+| `kokoro:jf_alpha` | Japanese | [listen](docs/samples/ja-alpha.mp3) |
+| `kokoro:ef_dora` | Spanish | [listen](docs/samples/es-dora.mp3) |
+| `kokoro:ff_siwis` | French | [listen](docs/samples/fr-siwis.mp3) |
+
 ## What you need
 
 - **Claude Code 2.1.287 or later, in the terminal.** Read-along is a mod, a
@@ -162,6 +176,15 @@ checked against a pinned SHA-256.
   30 minutes.
 
 ## How it works
+
+```mermaid
+flowchart LR
+    reply["Claude's reply"] --> mod["read-along<br/>(in Claude Code)"]
+    mod -- "text" --> service["speech service<br/>(on your machine)"]
+    service -- "a sentence" --> engine["voice<br/>Kokoro · macOS · Windows · eSpeak"]
+    engine -- "audio" --> player["ffplay or SoX"] --> speakers(["your speakers"])
+    service -. "the sentence being heard" .-> mod
+```
 
 `plugin/hooks/register.tsx` is the Claude Code side: the buttons, the highlight, the
 player and the commands. `plugin/bin/speakd.py` is the speech service, shared by

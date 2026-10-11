@@ -53,5 +53,5 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
 
 - [ ] Try it on a Mac (the `say` engine, SoX playback) and on a plain Linux
       desktop (PipeWire or PulseAudio).
-- [ ] A short GIF of a reply being read with the highlight, for the README.
+- [ ] A short animation of a reply being read with the highlight, for the README (voice samples and the diagram are in).
 - [ ] Version 1.0.0 in plugin.json and the changelog; tag it.
