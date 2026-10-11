@@ -1,0 +1,14 @@
+{
+  "name": "claude-read-along",
+  "owner": {
+    "name": "Yotam Sechayk"
+  },
+  "description": "Read-along for Claude Code: hear replies with the sentence being read highlighted.",
+  "plugins": [
+    {
+      "name": "read-along",
+      "source": "./",
+      "description": "Listen to Claude Code's replies while the sentence being read is highlighted. Local voices, several languages."
+    }
+  ]
+}

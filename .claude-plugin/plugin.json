@@ -1,7 +1,23 @@
 {
-  "name": "read-aloud",
-  "version": "0.8.0",
-  "description": "Read messages aloud with Kokoro or Windows voices: buttons on every message, the sentence marked as it's read, a progress band, per-language voices, and auto-read.",
+  "name": "read-along",
+  "version": "0.9.0",
+  "description": "Listen to Claude's replies while the sentence being read is highlighted. Local voices (Kokoro, or your system's own), several languages, auto-read, and a player above the prompt.",
+  "author": {
+    "name": "Yotam Sechayk",
+    "url": "https://github.com/tomfluff"
+  },
+  "homepage": "https://github.com/tomfluff/claude-read-along",
+  "repository": "https://github.com/tomfluff/claude-read-along",
+  "license": "MIT",
+  "keywords": [
+    "accessibility",
+    "text-to-speech",
+    "tts",
+    "read-aloud",
+    "dyslexia",
+    "low-vision",
+    "kokoro"
+  ],
   "types": "./types/index.d.ts",
   "userConfig": {
     "englishVoice": {
@@ -125,7 +141,7 @@
     "bottom": {
       "type": "string",
       "title": "Bottom player",
-      "description": "band: a one-row player above the prompt, always there so nothing jumps; hint: progress as dim text on the hint line under the prompt, no extra row (control from the message buttons or /read-aloud).",
+      "description": "band: a one-row player above the prompt, always there so nothing jumps; hint: progress as dim text on the hint line under the prompt, no extra row (control from the message buttons or /read-along).",
       "default": "band",
       "options": [
         "band",

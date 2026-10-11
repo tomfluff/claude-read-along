@@ -1,19 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, RenderInput } from 'claude-code'
 
-import type { ReadAloudCursor, ReadAloudSettings, ReadAloudStatus } from '../types'
+import type { ReadAlongCursor, ReadAlongSettings, ReadAlongStatus } from '../types'
 
-// Read-aloud: buttons on every message, a band while reading, auto-read, and
+// Read-along: buttons on every message, a band while reading, auto-read, and
 // the sentence being read marked in its message.
 // The speech itself is bin/speakd.py, one local service per user that every
 // session shares (so only one voice talks at a time), reached over HTTP on a
 // Unix socket. A voice is a Kokoro name (af_heart) or `win:<Windows voice>`.
 
-const now = atom({ plugin: 'read-aloud', key: 'now' } as const, null)
-const current = atom({ plugin: 'read-aloud', key: 'prefs' } as const, null)
-const cursor = atom({ plugin: 'read-aloud', key: 'cursor' } as const, null)
+const now = atom({ plugin: 'read-along', key: 'now' } as const, null)
+const current = atom({ plugin: 'read-along', key: 'prefs' } as const, null)
+const cursor = atom({ plugin: 'read-along', key: 'cursor' } as const, null)
 
-const PANE = 'read-aloud'
+const PANE = 'read-along'
 const SPEED_STEP = 0.25
 const VOLUME_STEP = 10
 /**
@@ -32,7 +32,7 @@ const BUTTONS = {
   text: { play: '▶', pause: '‖', stop: '■', back: '«', forward: '»', slower: '−', faster: '+', restart: '⟲' },
 } as const
 const btn = (name: keyof (typeof BUTTONS)['text']) => BUTTONS[str('icons', 'nerd') === 'text' ? 'text' : 'nerd'][name]
-const stateOf = (status: ReadAloudStatus) => (status.state === 'paused' ? 'paused' : status.state === 'loading' ? 'loading' : 'playing')
+const stateOf = (status: ReadAlongStatus) => (status.state === 'paused' ? 'paused' : status.state === 'loading' ? 'loading' : 'playing')
 const DUCK_LEVELS = ['off', '50%', '30%', '15%']
 /** Other apps' volume while reading, as a fraction of their own: `30%` → 0.3, `off` → 1. */
 const duckLevel = (duckOthers: string) => (duckOthers === 'off' ? 1 : Math.max(0, Math.min(1, parseFloat(duckOthers) / 100 || 1)))
@@ -58,7 +58,7 @@ const list = (k: string, d: string) =>
     .map(v => v.trim())
     .filter(Boolean)
 
-const defaults = (): ReadAloudSettings => ({
+const defaults = (): ReadAlongSettings => ({
   voice: str('englishVoice', 'af_heart'),
   voices: list('englishVoices', 'af_heart,am_fenrir,bf_emma'),
   jaVoice: str('japaneseVoice', 'win:Microsoft Nanami Native'),
@@ -82,7 +82,7 @@ let lastError: string | null | undefined
 // ------------------------------------------------------------ the service
 
 async function sock($: $) {
-  if (!socketPath) socketPath = `/tmp/read-aloud-${(await $.env.get('USER')) ?? 'user'}.sock`
+  if (!socketPath) socketPath = `/tmp/read-along-${(await $.env.get('USER')) ?? 'user'}.sock`
   return socketPath
 }
 
@@ -96,7 +96,7 @@ async function ensure($: $) {
   isEnsured = true
 }
 
-async function call($: $, path: string, body?: unknown): Promise<ReadAloudStatus> {
+async function call($: $, path: string, body?: unknown): Promise<ReadAlongStatus> {
   const go = async () => {
     const res = await $.http.fetch(`http://speakd${path}`, {
       method: body === undefined ? 'GET' : 'POST',
@@ -104,7 +104,7 @@ async function call($: $, path: string, body?: unknown): Promise<ReadAloudStatus
       body: body === undefined ? undefined : JSON.stringify(body),
       socketPath: await sock($),
     })
-    return JSON.parse(res.text) as ReadAloudStatus
+    return JSON.parse(res.text) as ReadAlongStatus
   }
   await ensure($)
   try {
@@ -120,7 +120,7 @@ async function settings($: $) {
   return { ...defaults(), ...((await read($, current)) ?? {}) }
 }
 
-function setSettings($: $, change: Partial<ReadAloudSettings>) {
+function setSettings($: $, change: Partial<ReadAlongSettings>) {
   return update($, current, s => ({ ...defaults(), ...(s ?? {}), ...change }))
 }
 
@@ -130,14 +130,14 @@ function setSettings($: $, change: Partial<ReadAloudSettings>) {
  * unchanged write (the idle check every 3 s) redrew the whole transcript and
  * made it jitter when it met a message being sent.
  */
-async function show($: $, status: ReadAloudStatus) {
+async function show($: $, status: ReadAlongStatus) {
   const isIdle = status.state === 'idle' && !status.queue
   const nextNow = isIdle ? null : status
   if (JSON.stringify(await read($, now)) !== JSON.stringify(nextNow)) await update($, now, () => nextNow)
-  const nextCursor: ReadAloudCursor | null = isIdle || !status.key ? null : { key: status.key, text: status.text ?? '' }
+  const nextCursor: ReadAlongCursor | null = isIdle || !status.key ? null : { key: status.key, text: status.text ?? '' }
   const at = await read($, cursor)
   if (at?.key !== nextCursor?.key || at?.text !== nextCursor?.text) await update($, cursor, () => nextCursor)
-  if (status.error && status.error !== lastError) $.ui.toast(`Read aloud: ${status.error}`)
+  if (status.error && status.error !== lastError) $.ui.toast(`Read along: ${status.error}`)
   lastError = status.error
 }
 
@@ -162,7 +162,7 @@ async function tick($: $) {
   if (!isActive && ticks % 8 !== 0) return
   try {
     const res = await $.http.fetch('http://speakd/status', { socketPath: await sock($) })
-    const status = JSON.parse(res.text) as ReadAloudStatus
+    const status = JSON.parse(res.text) as ReadAlongStatus
     await show($, status)
     isActive = !(status.state === 'idle' && !status.queue)
   } catch {
@@ -192,7 +192,7 @@ async function speak($: $, text: string, key: string, label: string, mode: 'now'
     await show($, status)
     poll()
   } catch (err) {
-    $.ui.toast(`Read aloud: ${String(err)}`)
+    $.ui.toast(`Read along: ${String(err)}`)
   }
 }
 
@@ -201,7 +201,7 @@ async function control($: $, action: string) {
     await show($, await call($, '/control', { action }))
     poll()
   } catch (err) {
-    $.ui.toast(`Read aloud: ${String(err)}`)
+    $.ui.toast(`Read along: ${String(err)}`)
   }
 }
 
@@ -259,7 +259,7 @@ async function saveDefaults($: $) {
   ]
   const refused: string[] = []
   for (const [field, value] of fields) {
-    const { deny } = await $.config.set({ key: `read-aloud.${field}`, value })
+    const { deny } = await $.config.set({ key: `read-along.${field}`, value })
     if (deny) refused.push(`${field} (${deny})`)
   }
   return refused.length ? `Not saved: ${refused.join(', ')}` : 'Saved as the defaults for new sessions.'
@@ -540,7 +540,7 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
           </Text>
         </Text>
         <Button key="last" hotkey="r" label="▶ last reply" onPress={() => readLast($)} />
-        <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read aloud' })} />
+        <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read along' })} />
       </Box>
     )
   }
@@ -592,8 +592,8 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'read-aloud',
-      description: 'Read aloud: open its settings, or stop | pause | read | speed N | voice NAME | auto replies off|final|all | auto mine on|off | save',
+      name: 'read-along',
+      description: 'Read along: open its settings, or stop | pause | read | speed N | voice NAME | auto replies off|final|all | auto mine on|off | save',
       argumentHint: '[stop|pause|read|speed N|voice NAME|auto …|save]',
     })
     ticker?.cancel()
@@ -637,14 +637,14 @@ export const register: Register = (on, options) => {
     return step
   })
 
-  on('command.run', { command: 'read-aloud' }, async ($, e) => {
+  on('command.run', { command: 'read-along' }, async ($, e) => {
     const [verb = '', ...rest] = e.args.trim().split(/\s+/).filter(Boolean)
     const arg = rest.join(' ')
     switch (verb) {
       case '':
       case 'settings':
-        await $.ui.open({ id: PANE, title: 'Read aloud' })
-        return { text: 'Read-aloud settings opened.' }
+        await $.ui.open({ id: PANE, title: 'Read along' })
+        return { text: 'Read-along settings opened.' }
       case 'stop':
       case 'pause':
         await control($, verb === 'stop' ? 'stop' : 'toggle')
@@ -653,7 +653,7 @@ export const register: Register = (on, options) => {
         return { text: (await readLast($)) ? 'Reading the last reply.' : 'No reply to read yet.' }
       case 'speed': {
         const speed = Number(arg)
-        if (!Number.isFinite(speed) || speed <= 0) return { text: 'Usage: /read-aloud speed 2.5' }
+        if (!Number.isFinite(speed) || speed <= 0) return { text: 'Usage: /read-along speed 2.5' }
         await setSpeed($, speed)
         return { text: `Speed ${(await settings($)).speed}×.` }
       }
@@ -662,7 +662,7 @@ export const register: Register = (on, options) => {
         const [first = '', ...more] = rest
         const lang: Lang = first === 'ja' || first === 'he' || first === 'en' ? first : 'en'
         const voice = (lang === first ? more.join(' ') : arg).trim()
-        if (!voice) return { text: 'Usage: /read-aloud voice am_fenrir, voice ja jf_alpha, voice he win:Microsoft Hila Native' }
+        if (!voice) return { text: 'Usage: /read-along voice am_fenrir, voice ja jf_alpha, voice he win:Microsoft Hila Native' }
         await setVoice($, lang, voice)
         return { text: `${LANGS.find(l => l.lang === lang)?.name} voice: ${voiceName(voice, true)}.` }
       }
@@ -676,7 +676,7 @@ export const register: Register = (on, options) => {
           await setSettings($, { autoReadMine: value === 'on' })
           return { text: `Auto-read my messages: ${value}.` }
         }
-        return { text: 'Usage: /read-aloud auto replies off|final|all, or auto mine on|off' }
+        return { text: 'Usage: /read-along auto replies off|final|all, or auto mine on|off' }
       }
       case 'save':
         return { text: await saveDefaults($) }
@@ -734,7 +734,7 @@ export const register: Register = (on, options) => {
     return next({ ...e, props: { ...e.props, tail } })
   })
 
-  // /read-aloud with no arguments: the settings, one place for all of them.
+  // /read-along with no arguments: the settings, one place for all of them.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const s = await settings($)
@@ -793,16 +793,16 @@ export const register: Register = (on, options) => {
         <Box columnGap={1}>
           <Text bold>Controls while reading</Text>
           {['bottom', 'message', 'both'].map(v => (
-            <Button key={`controls-${v}`} label={v} variant={pick(controlsAt() === v)} onPress={() => $.config.set({ key: 'read-aloud.controls', value: v })} />
+            <Button key={`controls-${v}`} label={v} variant={pick(controlsAt() === v)} onPress={() => $.config.set({ key: 'read-along.controls', value: v })} />
           ))}
         </Box>
         <Box columnGap={1}>
           <Text bold>Bottom player</Text>
           {(['band', 'hint'] as const).map(v => (
-            <Button key={`bottom-${v}`} label={v} variant={pick(str('bottom', 'band') === v)} onPress={() => $.config.set({ key: 'read-aloud.bottom', value: v })} />
+            <Button key={`bottom-${v}`} label={v} variant={pick(str('bottom', 'band') === v)} onPress={() => $.config.set({ key: 'read-along.bottom', value: v })} />
           ))}
         </Box>
-        <Text dimColor>The message buttons switch the English voice. Lists and defaults are in /config under read-aloud; the two rows above save at once.</Text>
+        <Text dimColor>The message buttons switch the English voice. Lists and defaults are in /config under read-along; the two rows above save at once.</Text>
       </Box>
     )
   })

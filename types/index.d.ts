@@ -1,5 +1,5 @@
 /** What the speech service reports about the read in progress. */
-export type ReadAloudStatus = {
+export type ReadAlongStatus = {
   state: 'idle' | 'loading' | 'playing' | 'paused'
   /** The mod's handle on the message being read (see `messageKey`). */
   key?: string
@@ -18,8 +18,8 @@ export type ReadAloudStatus = {
   error?: string | null
 }
 
-/** The settings in force this session; /read-aloud save makes them the defaults. A voice is a Kokoro name (af_heart) or `win:<Windows voice>`. */
-export type ReadAloudSettings = {
+/** The settings in force this session; /read-along save makes them the defaults. A voice is a Kokoro name (af_heart) or `win:<Windows voice>`. */
+export type ReadAlongSettings = {
   voice: string
   voices: string[]
   jaVoice: string
@@ -36,14 +36,14 @@ export type ReadAloudSettings = {
 }
 
 /** Which message is being read, and the sentence heard now. */
-export type ReadAloudCursor = { key: string; text: string }
+export type ReadAlongCursor = { key: string; text: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'read-aloud': {
-      now: ReadAloudStatus | null
-      prefs: ReadAloudSettings | null
-      cursor: ReadAloudCursor | null
+    'read-along': {
+      now: ReadAlongStatus | null
+      prefs: ReadAlongSettings | null
+      cursor: ReadAlongCursor | null
     }
   }
 }

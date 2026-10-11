@@ -1,4 +1,4 @@
-# Lowers other apps' volume on Windows while read-aloud speaks, and puts it back.
+# Lowers other apps' volume on Windows while read-along speaks, and puts it back.
 # Reads JSON lines on stdin: {"op":"list"} | {"op":"duck","level":0.3,"keep":["msrdc"]} | {"op":"restore"}.
 # Restores everything when stdin closes, so a speech service that dies never leaves apps quiet.
 $ErrorActionPreference = 'Stop'
@@ -9,7 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace ReadAloud {
+namespace ReadAlong {
   [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumerator {}
 
   [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -147,7 +147,7 @@ namespace ReadAloud {
 
 $saved = New-Object 'System.Collections.Generic.Dictionary[string,float]'  # session -> volume before ducking
 
-function Restore { [void][ReadAloud.Mixer]::Restore($saved) }
+function Restore { [void][ReadAlong.Mixer]::Restore($saved) }
 
 [Console]::Out.WriteLine('READY'); [Console]::Out.Flush()
 try {
@@ -155,9 +155,9 @@ try {
     try {
       $req = $line | ConvertFrom-Json
       switch ($req.op) {
-        'list' { [Console]::Out.WriteLine('LIST ' + [ReadAloud.Mixer]::List()) }
+        'list' { [Console]::Out.WriteLine('LIST ' + [ReadAlong.Mixer]::List()) }
         'duck' {
-          $n = [ReadAloud.Mixer]::Duck([float]$req.level, [string[]]@($req.keep), $saved, $PID)
+          $n = [ReadAlong.Mixer]::Duck([float]$req.level, [string[]]@($req.keep), $saved, $PID)
           [Console]::Out.WriteLine("OK $n")
         }
         'restore' { Restore; [Console]::Out.WriteLine('OK') }

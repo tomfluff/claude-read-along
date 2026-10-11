@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""speakd: the read-aloud mod's local speech service.
+"""speakd: the read-along mod's local speech service.
 
 One process per user, shared by every Claude Code session, so only one
 voice talks at a time. It listens for HTTP on a Unix socket, synthesizes
@@ -34,7 +34,7 @@ from socketserver import ThreadingMixIn, UnixStreamServer
 
 RATE = 24000
 VERSION = str(os.stat(__file__).st_mtime_ns)  # --ensure replaces a service started from an older copy
-DEFAULT_SOCKET = f"/tmp/read-aloud-{os.getuid()}.sock"
+DEFAULT_SOCKET = f"/tmp/read-along-{os.getuid()}.sock"
 SEC_PER_CHAR_1X = 0.068  # first guess, refined from real synthesis
 LEAD_IN = 0.3  # seconds of silence opening each run
 DUCK_RELEASE = 0.8  # seconds after a read stops before other apps come back up
@@ -245,7 +245,7 @@ class Windows:
 
         with self.lock:
             self.n += 1
-            name = f"read-aloud-{os.getpid()}-{self.n % 8}.pcm"
+            name = f"read-along-{os.getpid()}-{self.n % 8}.pcm"
             line = self._ask({"text": text, "voice": voice or "", "file": name})
         if not line.startswith("OK "):
             raise RuntimeError(line[4:] or "Windows speech failed")
@@ -800,7 +800,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--socket", default=DEFAULT_SOCKET)
     ap.add_argument("--idle-exit", type=int, default=1800, help="seconds idle before exiting (frees VRAM)")
-    ap.add_argument("--log", default=f"/tmp/read-aloud-{os.getuid()}.log")
+    ap.add_argument("--log", default=f"/tmp/read-along-{os.getuid()}.log")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--serve", action="store_true")
     g.add_argument("--ensure", action="store_true")
