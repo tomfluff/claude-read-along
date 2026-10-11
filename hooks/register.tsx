@@ -497,6 +497,8 @@ async function drawMessage($: $, e: MessageEvent, raw: string, key: string, lead
 }
 
 /** The player's one row: idle settings, or the read in progress with its controls. */
+// Indented one column with two spaces after the icon, as token-weather's line
+// is, so the two rows' icons and first words line up.
 async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderElement> {
   const { Box, Text, Button } = $.ui.resolve(e)
   const status = await read($, now)
@@ -506,9 +508,9 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
   if (status === null) {
     const auto = s.autoReadReplies === 'off' && !s.autoReadMine ? 'auto-read off' : `auto-read ${[s.autoReadReplies !== 'off' ? `replies (${s.autoReadReplies})` : '', s.autoReadMine ? 'mine' : ''].filter(Boolean).join(' + ')}`
     return (
-      <Box columnGap={1} flexWrap="nowrap">
+      <Box columnGap={1} flexWrap="nowrap" paddingX={1}>
         <Text dimColor wrap="truncate-end">
-          ♪ {voiceName(s.voice)} · {s.speed}× · {auto}
+          ♪{'  '}{voiceName(s.voice)} · {s.speed}× · {auto}
         </Text>
         <Button key="last" hotkey="r" label="▶ last reply" onPress={() => readLast($)} />
         <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read aloud' })} />
@@ -522,12 +524,12 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
   const queued = status.queue ? ` +${status.queue}` : ''
   const voice = voiceName(status.voice ?? s.voice)
   // Everything but the bar has a fixed width; the bar takes what is left, so the row never wraps.
-  const fixed = 2 + 5 + 1 + 5 + where.length + queued.length + 1 + 6 * 6 + (voice.length + 5) + 8
+  const fixed = 5 + 5 + 1 + 5 + where.length + queued.length + 1 + 6 * 6 + (voice.length + 5) + 8
   const width = Math.max(4, Math.min(40, cols - fixed))
   return (
-    <Box columnGap={1} flexWrap="nowrap">
+    <Box columnGap={1} flexWrap="nowrap" paddingX={1}>
       <Text color="cyan" wrap="truncate-end">
-        {isPaused ? '‖' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+        {isPaused ? '‖' : status.state === 'loading' ? '…' : '♪'}{'  '}{clock(status.position)} {bar(fraction, width)} {clock(status.total)}
         <Text dimColor>
           {where}
           {queued}
