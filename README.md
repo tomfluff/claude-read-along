@@ -182,8 +182,10 @@ checked against a pinned SHA-256.
   `/read-along doctor` in the terminal. Under "Surfaces" it lists each app
   following the session and what it has asked read-along to draw; an app
   that has asked for nothing doesn't draw mods yet. On the phone the buttons
-  show all the time, as there is no pointer to hover with. The voice always
-  plays on the computer running the session.
+  show all the time, as there is no pointer to hover with. The desktop app
+  following a terminal session through Remote Control asks for nothing as of
+  Claude Code 2.1.296, so it shows no buttons there. The voice always plays on
+  the computer running the session.
 - **The first read is slow.** Kokoro loads its model on the first read of a
   session (a few seconds), then keeps it until the service has been idle for
   30 minutes.
