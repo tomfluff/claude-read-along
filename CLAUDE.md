@@ -48,6 +48,17 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
   own `$.command.run` never reaches its own `command.run` hook; leave a child
   out with `cond ? [<X/>] : []`, never `cond && <X/>`; write `$.state` only
   when the value changed (each write redraws its readers).
+- The band above the prompt is drawn by the mods in `enabledPlugins` order;
+  a mod that answers it without calling `next(e)` hides every mod after it
+  (token-weather and replay-theater did). read-along checks for this itself.
+- In `claude plugin test`, the test's bottom hooks answer `process.run`,
+  `http.fetch`, `ui.toast` and `command.register` as `{ value: ... }`
+  (`session.start` as `{ cwd }`); use `mock.env` and `mock.clock` for those.
+- Over Remote Control, the Claude phone and desktop apps draw no mods
+  (2.1.296): no buttons, toasts or status line. Typed commands work (#6).
+- GitHub READMEs play no video or audio from repository files: relative links,
+  `<video>` tags, blob or raw URLs and an MP3 renamed to `.mp4` all failed
+  (2026-10-11). The README uses a GIF; the web page plays the real files.
 
 ## Release 0.9.0 (public preview)
 
