@@ -670,15 +670,15 @@ export const register: Register = (on, options) => {
   // so it never pushes the transcript when a read starts or ends. With
   // `bottom: hint` it is a dim tail on the hint line under the prompt instead.
   // Other mods draw here too (token-weather, blast-radius): their band stays,
-  // with the player's row under it, rather than the player hiding it.
+  // under the player's row, rather than the player hiding it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || controlsAt() === 'message' || str('bottom', 'band') !== 'band') return next(e)
     const others = await next(e)
     const { Box } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
-        {others}
         {await playerRow($, e)}
+        {others}
       </Box>
     )
   })
