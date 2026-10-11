@@ -553,10 +553,15 @@ class Player:
     def speak(self, req):
         job = Job(req)
         with self.lock:
-            if req.get("mode") == "queue" and self.job:
+            mode = req.get("mode") or "now"
+            # One line per request, so a read that never happened can be traced:
+            # a "now" read drops whatever was queued.
+            log(f"speak {mode} {job.label or '-'} {job.key or '-'}: {len(job.sentences)} sentences;",
+                f"queued before: {len(self.queue)}{' (dropped)' if mode != 'queue' and self.queue else ''}")
+            if mode == "queue" and self.job:
                 self.queue.append(job)
             else:
-                if req.get("mode") != "queue":
+                if mode != "queue":
                     self.queue.clear()
                 self._start_locked(job, 0)
         return self.status()
