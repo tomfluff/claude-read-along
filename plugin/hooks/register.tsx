@@ -513,8 +513,71 @@ const markSentence = (raw: string, sentence: string) => {
   return `${raw.slice(0, at.start)}**${span}**${raw.slice(at.end)}`
 }
 
-/** Inline markdown taken out of a piece of the line being read, which is drawn as plain text. */
-const plain = (text: string) => text.replace(/\[([^\]]+)\]\(([^)]*)\)/g, '$1').replace(/\*\*|__|`/g, '')
+/**
+ * The line being read, with its inline markdown drawn as Markdown would but
+ * without colour: bold, italics, struck-through text and links (underlined)
+ * keep their look, inline code loses only its backticks. Each piece knows
+ * where it sits in the message, so the highlight covers just the sentence
+ * heard. One colour on purpose: the highlight's.
+ */
+export type InlineStyle = { bold?: true; italic?: true; strikethrough?: true; underline?: true }
+export type InlineRun = { text: string; style: InlineStyle; isRead: boolean }
+
+export function inlineRuns(raw: string, from: number, to: number, read: { start: number; end: number }): InlineRun[] {
+  const cells: { ch: string; at: number; style: InlineStyle }[] = []
+  const put = (text: string, at: number, style: InlineStyle) => {
+    let k = 0
+    for (const ch of text) {
+      cells.push({ ch, at: at + k, style })
+      k += ch.length // positions count UTF-16 units, as the sentence's do
+    }
+  }
+  const walk = (src: string, base: number, style: InlineStyle) => {
+    let i = 0
+    while (i < src.length) {
+      const rest = src.slice(i)
+      const c = src[i] ?? ''
+      let m: RegExpMatchArray | null
+      if (c === '\\' && /[\\`*_[\]()~#>!-]/.test(src[i + 1] ?? '')) {
+        put(src[i + 1] ?? '', base + i + 1, style)
+        i += 2
+      } else if ((m = rest.match(/^`([^`]+)`/))) {
+        put(m[1] ?? '', base + i + 1, style)
+        i += m[0].length
+      } else if ((m = rest.match(/^\[([^\]]+)\]\([^)\s]*(?:\s+"[^"]*")?\)/))) {
+        walk(m[1] ?? '', base + i + 1, { ...style, underline: true })
+        i += m[0].length
+      } else if ((m = rest.match(/^<(https?:\/\/[^>\s]+)>/))) {
+        put(m[1] ?? '', base + i + 1, { ...style, underline: true })
+        i += m[0].length
+      } else if ((m = rest.match(/^(\*\*|__)(?=\S)([\s\S]*?\S)\1/))) {
+        walk(m[2] ?? '', base + i + 2, { ...style, bold: true })
+        i += m[0].length
+      } else if ((m = rest.match(/^~~(?=\S)([\s\S]*?\S)~~/))) {
+        walk(m[1] ?? '', base + i + 2, { ...style, strikethrough: true })
+        i += m[0].length
+      } else if ((m = rest.match(/^\*(?=\S)([\s\S]*?\S)\*/))) {
+        walk(m[1] ?? '', base + i + 1, { ...style, italic: true })
+        i += m[0].length
+      } else if (c === '_' && !/[\p{L}\p{N}]/u.test(src[i - 1] ?? '') && (m = rest.match(/^_(?=\S)([\s\S]*?\S)_(?![\p{L}\p{N}])/u))) {
+        walk(m[1] ?? '', base + i + 1, { ...style, italic: true })
+        i += m[0].length
+      } else {
+        put(c === '\n' ? ' ' : c, base + i, style) // a soft line break reads as a space, as in Markdown
+        i += 1
+      }
+    }
+  }
+  walk(raw.slice(from, to), from, {})
+  const runs: InlineRun[] = []
+  for (const { ch, at, style } of cells) {
+    const isRead = at >= read.start && at < read.end
+    const last = runs[runs.length - 1]
+    if (last && last.isRead === isRead && JSON.stringify(last.style) === JSON.stringify(style)) last.text += ch
+    else runs.push({ text: ch, style, isRead })
+  }
+  return runs
+}
 
 /**
  * The `highlight` setting as Text props: `reverse` swaps the text and
@@ -554,10 +617,8 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
   const quote = line.match(/^>\s?/)
   const skipped = (marker?.[0] ?? heading?.[0] ?? quote?.[0] ?? '').length
   const prefix = marker ? `${marker[1]}${/\d/.test(marker[2] ?? '') ? marker[2] : '•'} ` : quote ? '│ ' : ''
-  const from = Math.max(lineStart + skipped, Math.min(at.start, lineEnd))
-  const pre = plain(raw.slice(lineStart + skipped, from))
-  const span = plain(raw.slice(from, Math.min(at.end, lineEnd)))
-  const post = plain(raw.slice(Math.min(at.end, lineEnd), lineEnd))
+  const runs = inlineRuns(raw, lineStart + skipped, lineEnd, at)
+  const hl = highlightProps(str('highlight', 'reverse'))
 
   // marginTop: the engine draws each message with a blank row above it; without
   // it, a message being read sat flush against the one before until reading ended.
@@ -569,9 +630,11 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
         <Box marginTop={before ? gapBefore : 0}>
           <Text bold={heading !== null}>
             {prefix}
-            {pre}
-            <Text {...highlightProps(str('highlight', 'reverse'))}>{span}</Text>
-            {post}
+            {runs.map(r => (
+              <Text {...r.style} {...(r.isRead ? hl : {})}>
+                {r.text}
+              </Text>
+            ))}
           </Text>
         </Box>
         {after

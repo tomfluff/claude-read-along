@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { formatVoices, highlightProps, parseVoices, voiceName } from '../hooks/register'
+import { formatVoices, highlightProps, inlineRuns, parseVoices, voiceName } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -221,3 +221,26 @@ for (const readThinking of [true, false]) {
     expect(spoken).toEqual(readThinking ? ["I'll check the reference links first."] : [])
   })
 }
+
+test('the line being read keeps bold, italics, links and strikethrough, in one colour', async () => {
+  const raw = 'Use **bold** and _it_ with [a link](https://x.y) and `code`, ~~gone~~. Next one 🎉 here.'
+  const read = { start: 0, end: raw.indexOf('Next') - 1 }
+  const runs = inlineRuns(raw, 0, raw.length, read)
+  const text = runs.map(r => r.text).join('')
+  expect(text).toBe('Use bold and it with a link and code, gone. Next one 🎉 here.')
+  const styleOf = (t: string) => runs.find(r => r.text.includes(t))?.style
+  expect(styleOf('bold')).toEqual({ bold: true })
+  expect(styleOf('it ')).toBeUndefined() // "it" is its own run
+  expect(runs.find(r => r.text === 'it')?.style).toEqual({ italic: true })
+  expect(styleOf('a link')).toEqual({ underline: true })
+  expect(styleOf('gone')).toEqual({ strikethrough: true })
+  expect(styleOf('code')).toEqual({}) // inline code: backticks gone, no colour
+  // The highlight covers the first sentence only.
+  expect(runs.filter(r => r.isRead).map(r => r.text).join('')).toBe('Use bold and it with a link and code, gone.')
+  expect(runs.filter(r => !r.isRead).map(r => r.text).join('')).toBe(' Next one 🎉 here.')
+  // snake_case stays as written; a sentence after an emoji is still found.
+  expect(inlineRuns('call read_along_now', 0, 19, { start: 0, end: 0 }).map(r => r.text).join('')).toBe('call read_along_now')
+  const emoji = '🎉 Done. Then more.'
+  const after = inlineRuns(emoji, 0, emoji.length, { start: emoji.indexOf('Then'), end: emoji.length })
+  expect(after.filter(r => r.isRead).map(r => r.text).join('')).toBe('Then more.')
+})

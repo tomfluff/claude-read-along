@@ -13,6 +13,9 @@ on WSL; on Linux and macOS it passes CI but hasn't been tried by hand yet.
   read-along in `enabledPlugins` that draws there without passing the band
   on), read-along says so once, shows the player on the line under the
   prompt meanwhile, and `/read-along doctor` reports it.
+- The line being read keeps its bold, italics, struck-through text and links
+  (underlined) under the highlight, in the highlight's one colour; it used to
+  turn plain while highlighted.
 - "Read thinking updates" (off by default; `/read-along auto thinking on`):
   with auto-read `all`, also read Claude's thinking, for setups that show it
   as updates in the transcript, where a step can show only thinking before its
