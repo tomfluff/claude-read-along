@@ -17,6 +17,7 @@ import speakd  # noqa: E402
 
 SAY = """\
 Albert              en_US    # Hello! My name is Albert.
+Samantha            en_US    # Hello! My name is Samantha.
 Eddy (English (US)) en_US    # Hello! My name is Eddy.
 Kyoko               ja_JP    # こんにちは、私の名前はKyokoです。
 Carmit              he_IL    # שלום, שמי כרמית.
@@ -35,14 +36,16 @@ Pty Language       Age/Gender VoiceName          File                 Other Lang
 class Parsing(unittest.TestCase):
     def test_say_voices(self):
         voices = engines.parse_say_voices(SAY)
-        self.assertEqual([v["name"] for v in voices], ["Albert", "Eddy (English (US))", "Kyoko", "Carmit", "Ava (Premium)"])
-        self.assertEqual(voices[2], {"id": "mac:Kyoko", "name": "Kyoko", "lang": "ja-JP"})
+        self.assertEqual([v["name"] for v in voices], ["Albert", "Samantha", "Eddy (English (US))", "Kyoko", "Carmit", "Ava (Premium)"])
+        self.assertEqual(voices[3], {"id": "mac:Kyoko", "name": "Kyoko", "lang": "ja-JP"})
 
     def test_mac_prefers_premium(self):
         mac = engines.Mac()
         mac._voices = engines.parse_say_voices(SAY)
         mac.available = lambda: (True, "")
         self.assertEqual(mac.best(["en"]), "Ava (Premium)")
+        mac._voices = [v for v in mac._voices if "Premium" not in v["name"]]
+        self.assertEqual(mac.best(["en"]), "Samantha")
         self.assertEqual(mac.best(["he"]), "Carmit")
         self.assertIsNone(mac.best(["ko"]))
 

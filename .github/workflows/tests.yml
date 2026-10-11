@@ -13,8 +13,8 @@ jobs:
         python: ["3.9", "3.13"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - name: eSpeak NG and a player (Linux)
@@ -26,3 +26,6 @@ jobs:
         run: python -I plugin/bin/speakd.py --doctor
       - name: Make speech with this machine's voice
         run: python -I plugin/tests/smoke.py
+      - name: Japanese and Hebrew voices (macOS)
+        if: runner.os == 'macOS'
+        run: python -I -c "import sys; sys.path.insert(0, 'plugin/bin'); from engines import Engines; e = Engines(); print({g: e.auto(g) for g in ('main', 'ja', 'he', 'zh', 'ko')})"

@@ -538,6 +538,16 @@ def win_short(name: str) -> str:
 
 # -- macOS
 
+# The usual default voice of each language, to prefer over the rest.
+MAC_GOOD = {"Samantha", "Alex", "Ava", "Allison", "Susan", "Tom", "Daniel", "Karen", "Moira", "Kyoko", "Otoya",
+            "Carmit", "Tingting", "Meijia", "Sinji", "Yuna", "Monica", "Paulina", "Thomas", "Amelie", "Anna",
+            "Alice", "Luciana", "Joana", "Milena", "Maged", "Lekha", "Melina", "Kanya", "Xander", "Zosia"}
+# Novelty voices (Albert, Bubbles, Zarvox, …) and the Eloquence ones (Eddy,
+# Flo, …): installed everywhere, last choices for reading.
+MAC_NOVELTY = {"Albert", "Bad News", "Bahh", "Bells", "Boing", "Bubbles", "Cellos", "Fred", "Good News", "Jester",
+               "Junior", "Kathy", "Organ", "Ralph", "Superstar", "Trinoids", "Whisper", "Wobble", "Zarvox"}
+MAC_ELOQUENCE = {"Eddy", "Flo", "Grandma", "Grandpa", "Reed", "Rocko", "Sandy", "Shelley"}
+
 SAY_LINE = re.compile(r"^(.+?)\s+([a-z]{2,3}[_-][A-Za-z0-9]+)\s+#")
 
 
@@ -579,7 +589,13 @@ class Mac(Engine):
     def best(self, langs):
         def rank(v):
             n = v["name"]
-            return (0 if "Premium" in n else 1 if "Enhanced" in n else 2, v["lang"] != "en-US")
+            base = n.split(" (")[0]
+            return (
+                0 if "Premium" in n else 1 if "Enhanced" in n else 2,
+                base not in MAC_GOOD,
+                base in MAC_NOVELTY or base in MAC_ELOQUENCE,
+                v["lang"] != "en-US",
+            )
 
         for lang in langs:
             matches = sorted((v for v in self.voices() if _lang_of(v["lang"]) == lang), key=rank)

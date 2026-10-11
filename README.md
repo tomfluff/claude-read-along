@@ -1,5 +1,11 @@
 # Read-along for Claude Code
 
+[![Tests: passing or failing, on Linux and macOS](https://github.com/tomfluff/claude-read-along/actions/workflows/tests.yml/badge.svg)](https://github.com/tomfluff/claude-read-along/actions/workflows/tests.yml)
+![Needs Claude Code 2.1.287 or later](https://img.shields.io/badge/Claude_Code-2.1.287%2B-D97757)
+![Runs on WSL, Linux and macOS](https://img.shields.io/badge/runs_on-WSL_%C2%B7_Linux_%C2%B7_macOS-4C7A9E)
+![Voices run locally; nothing is sent anywhere](https://img.shields.io/badge/voices-local_%26_private-2E7D32)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
+
 Listen to Claude's replies while the sentence being read is highlighted in
 the terminal, so you can follow along with your eyes and ears together.
 

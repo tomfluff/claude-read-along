@@ -55,4 +55,8 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
 - [ ] Lowering other apps beyond WSL: Linux through pactl (#3), macOS partial
       at best (#4). Not needed for v1.
 - [ ] A short animation of a reply being read with the highlight, for the README (voice samples and the diagram are in).
+- [ ] Once public: upload `docs/samples/video/*.mp4` (`gh issue comment … --attach`,
+      or drag them into GitHub's editor) and put the user-attachments links
+      in the README's "Hear it" table, so the samples play on the page.
+      GitHub plays videos uploaded that way, never audio or repo files.
 - [ ] Version 1.0.0 in plugin.json and the changelog; tag it.
