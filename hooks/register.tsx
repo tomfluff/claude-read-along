@@ -676,9 +676,14 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || controlsAt() === 'message' || str('bottom', 'band') !== 'band') return next(e)
     const others = await next(e)
-    const { Box } = $.ui.resolve(e)
+    const { Box, Text } = $.ui.resolve(e)
+    // A dim rule, like the one over the prompt, parts the band from the chat.
+    const cols = e.props.bodyColumns ?? e.viewport?.columns ?? 80
     return (
       <Box flexDirection="column">
+        <Text dimColor wrap="truncate-end">
+          {'─'.repeat(Math.max(1, cols))}
+        </Text>
         {await playerRow($, e)}
         {others}
       </Box>

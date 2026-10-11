@@ -38,8 +38,8 @@ test('the bottom player is one row even while idle, so nothing jumps', async ($,
   const ui = await $.ui.mount({ plugin: 'read-aloud', surface: 'terminal', component: 'AbovePrompt', props })
   expect(await ui.find({ key: 'last' })).toBeDefined()
   expect(await ui.find({ key: 'settings' })).toBeDefined()
-  // The player first, other mods' band under it: one row, not a column of rows.
+  // A rule, then the player, then other mods' band: the player is one row.
   const tree = (await ui.drawn()) as { children?: { props?: { flexDirection?: string } }[] }
-  const player = tree.children?.[0]
+  const player = tree.children?.[1]
   expect(player?.props?.flexDirection).toBeUndefined()
 })
