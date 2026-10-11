@@ -53,8 +53,8 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
 
 - [x] A short recording of a reply being read with the highlight (`docs/videos/`).
 - [x] README, changelog and the web page say only WSL has been tried by hand.
-- [ ] Make the repository public; tag `v0.9.0` and publish a GitHub release.
-- [ ] GitHub Pages from `main`, folder `/docs` (`docs/.nojekyll` keeps it
+- [x] Make the repository public; tag `v0.9.0` and publish a GitHub release (2026-10-11).
+- [x] GitHub Pages from `main`, folder `/docs` (`docs/.nojekyll` keeps it
       as-is). It appears at https://sechayk.com/claude-read-along/ (the user
       site's custom domain); set it as the repository's website and link it
       from the README's top and its "Hear it" section.
