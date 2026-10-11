@@ -51,7 +51,8 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
 
 ## Before making the repository public (v1)
 
-- [ ] Try it on a Mac (the `say` engine, SoX playback) and on a plain Linux
-      desktop (PipeWire or PulseAudio).
+- [ ] Test on macOS (issue #1) and on Linux desktops (issue #2).
+- [ ] Lowering other apps beyond WSL: Linux through pactl (#3), macOS partial
+      at best (#4). Not needed for v1.
 - [ ] A short animation of a reply being read with the highlight, for the README (voice samples and the diagram are in).
 - [ ] Version 1.0.0 in plugin.json and the changelog; tag it.
