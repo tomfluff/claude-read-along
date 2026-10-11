@@ -15,6 +15,10 @@ A mod for Claude Code: listen to Claude's replies while the sentence being
 read is highlighted in the terminal, so you can follow along with your eyes
 and ears together. **[Try the demo on its web page](https://sechayk.com/claude-read-along/).**
 
+![Read-along in Claude Code: hovering a reply shows its play, restart, speed and voice buttons; pressing play reads it aloud, each sentence highlighted as it's heard, with the player above the prompt showing the progress.](docs/videos/mouse-example.gif)
+
+<sub>No sound in a GIF; [the web page](https://sechayk.com/claude-read-along/#see-it) has the recordings with the voice.</sub>
+
 Read-along is for anyone who would rather hear long replies than read them:
 people with dyslexia, low vision, ADHD or eye strain, people reading in a
 second language, and anyone who wants to look away from the screen while
