@@ -542,27 +542,37 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
   const where = status.sentences ? ` ${(status.sentence ?? 0) + 1}/${status.sentences}` : ''
   const queued = status.queue ? ` +${status.queue}` : ''
   const voice = voiceName(status.voice ?? s.voice)
+  // Laid out like token-weather's line: icon and voice name in bold colour
+  // (where "Showers" sits), then the details. The name is the voice button.
   // Everything but the bar has a fixed width; the bar takes what is left, so the row never wraps.
-  const fixed = 5 + 5 + 1 + 5 + where.length + queued.length + 1 + 6 * 6 + (voice.length + 5) + 8
+  const fixed = 1 + 3 + voice.length + 2 + 12 + where.length + queued.length + 6 * 6 + 2
   const width = Math.max(4, Math.min(40, cols - fixed))
   return (
-    <Box columnGap={1} flexWrap="nowrap" paddingX={1}>
-      <Text color="cyan" wrap="truncate-end">
-        <Text bold>{icon(stateOf(status))}</Text>
+    <Box flexWrap="nowrap" paddingX={1}>
+      <Text color="cyan" bold>
+        {icon(stateOf(status))}
         {'  '}
-        {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
-        <Text dimColor>
-          {where}
-          {queued}
-        </Text>
       </Text>
-      <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '‖'} onPress={() => control($, 'toggle')} />
-      <Button key="stop" hotkey="s" label="■" onPress={() => control($, 'stop')} />
-      <Button key="back" hotkey="b" label="«" onPress={() => control($, 'back')} />
-      <Button key="forward" hotkey="n" label="»" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
-      <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
-      <Button key="faster" label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
-      <Button key="voice" hotkey="v" label={voice} onPress={() => nextVoice($)} />
+      <Button key="voice" plain label={voice} onPress={() => nextVoice($)}>
+        <Text color="cyan" bold>
+          {voice}
+        </Text>
+      </Button>
+      <Box columnGap={1} marginLeft={2} flexWrap="nowrap">
+        <Text color="cyan" wrap="truncate-end">
+          {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+          <Text dimColor>
+            {where}
+            {queued}
+          </Text>
+        </Text>
+        <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '‖'} onPress={() => control($, 'toggle')} />
+        <Button key="stop" hotkey="s" label="■" onPress={() => control($, 'stop')} />
+        <Button key="back" hotkey="b" label="«" onPress={() => control($, 'back')} />
+        <Button key="forward" hotkey="n" label="»" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
+        <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
+        <Button key="faster" label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
+      </Box>
     </Box>
   )
 }
