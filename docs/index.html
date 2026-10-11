@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<script>
+  // The theme picked with the page's toggle (system, light or dark), before
+  // anything draws, so the page doesn't flash the other theme.
+  try {
+    const theme = localStorage.getItem('theme')
+    if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+  } catch {}
+</script>
 <title>Read-along for Claude Code</title>
 <meta name="description" content="A mod for Claude Code: Claude's replies read aloud, with the sentence you're hearing highlighted. Local voices; nothing is sent anywhere.">
 <meta property="og:title" content="Read-along for Claude Code">
@@ -20,14 +29,25 @@
   --hl-bg: #FFAE84; --hl-fg: #141413; --focus: #2F6FB0;
   --bubble: #1F1E1D; --bubble-ink: #F0EEE6;
 }
+/* Dark: the system's choice unless the page's toggle picked light, or the
+   toggle's choice of dark (data-theme on <html>, set before the page draws). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #141413; --ink: #F0EEE6; --muted: #B4B0A6; --accent: #E08A68; --rule: #34322F;
     --card: #1F1E1D; --code-bg: #FAF9F5; --code-ink: #1F1E1D;
     --hl-bg: #B4330C; --hl-fg: #FFF6EF; --focus: #9DC4E8;
     --bubble: #FAF9F5; --bubble-ink: #1F1E1D;
+    color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #141413; --ink: #F0EEE6; --muted: #B4B0A6; --accent: #E08A68; --rule: #34322F;
+  --card: #1F1E1D; --code-bg: #FAF9F5; --code-ink: #1F1E1D;
+  --hl-bg: #B4330C; --hl-fg: #FFF6EF; --focus: #9DC4E8;
+  --bubble: #FAF9F5; --bubble-ink: #1F1E1D;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -40,13 +60,24 @@ body {
 a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 a:hover { color: var(--accent); }
 
+.theme {
+  position: absolute; top: 12px; right: 16px; z-index: 5; display: flex; gap: 2px; padding: 3px;
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--card);
+}
+.theme button {
+  font: 500 .85rem/1 'JetBrains Mono', monospace; color: var(--muted); background: none; border: 0;
+  padding: 7px 10px; border-radius: 7px; cursor: pointer;
+}
+.theme button:hover { color: var(--ink); }
+.theme button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
 /* The banner, live: the title, and beside it the mock terminal the robot
    lies on, which plays. Laid out as the README's banner image is. */
 header.hero {
   max-width: 1280px; margin: 0 auto; padding: 40px 16px 8px;
   display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 9fr); gap: 24px 48px; align-items: center;
 }
-@media (max-width: 900px) { header.hero { grid-template-columns: minmax(0, 1fr); padding-top: 24px; } }
+@media (max-width: 900px) { header.hero { grid-template-columns: minmax(0, 1fr); padding-top: 64px; } }
 .hero-text h1 { font-size: clamp(3.2rem, 7vw, 6rem); line-height: .9; letter-spacing: -.04em; margin: 16px 0 0; }
 .hero-text .kicker { margin: 0; font-size: clamp(.95rem, 1.4vw, 1.15rem); }
 .hero-text .lede { font: 500 clamp(1.15rem, 1.6vw, 1.5rem)/1.45 'JetBrains Mono', monospace; color: var(--muted); margin: 24px 0 0; }
@@ -120,11 +151,16 @@ th { font-family: 'JetBrains Mono', monospace; font-size: .9rem; }
   box-shadow: 0 30px 60px -30px rgba(20, 20, 19, .5);
 }
 @media (prefers-color-scheme: dark) {
-  .term {
+  :root:not([data-theme="light"]) .term {
     --t-bg: #FAF9F5; --t-edge: #D9D6CC; --t-ink: #1F1E1D; --t-dim: #6E6B64; --t-line: #ECE9E1; --t-dot: #CFCBC0;
     --t-code: #2F6FB0; --t-hl-bg: #B4330C; --t-hl-fg: #FFF6EF; --t-band: #9A5410;
     box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8);
   }
+}
+:root[data-theme="dark"] .term {
+  --t-bg: #FAF9F5; --t-edge: #D9D6CC; --t-ink: #1F1E1D; --t-dim: #6E6B64; --t-line: #ECE9E1; --t-dot: #CFCBC0;
+  --t-code: #2F6FB0; --t-hl-bg: #B4330C; --t-hl-fg: #FFF6EF; --t-band: #9A5410;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8);
 }
 .term:focus { outline: none; }
 .term:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -174,6 +210,11 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
 </head>
 <body>
 <a class="skip" href="#main">Skip to the content</a>
+<div class="theme" role="group" aria-label="Colour theme">
+  <button type="button" data-theme-pick="system" aria-pressed="true">System</button>
+  <button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+  <button type="button" data-theme-pick="dark" aria-pressed="false">Dark</button>
+</div>
 
 <header class="hero">
   <div class="hero-text">
@@ -401,6 +442,19 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
   });
   term.addEventListener('click', () => { if (!term.contains(document.activeElement)) term.focus(); });
   draw();
+</script>
+<script>
+  // The theme toggle: system follows the device, light and dark stay picked.
+  const picks = [...document.querySelectorAll('[data-theme-pick]')]
+  const showTheme = theme => picks.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themePick === theme)))
+  showTheme(document.documentElement.dataset.theme ?? 'system')
+  for (const b of picks) b.addEventListener('click', () => {
+    const theme = b.dataset.themePick
+    if (theme === 'system') delete document.documentElement.dataset.theme
+    else document.documentElement.dataset.theme = theme
+    try { theme === 'system' ? localStorage.removeItem('theme') : localStorage.setItem('theme', theme) } catch {}
+    showTheme(theme)
+  })
 </script>
 <script>
   // Highlight a sample's sentence while it plays, and play one sample at a time.
