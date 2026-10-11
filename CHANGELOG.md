@@ -12,6 +12,10 @@ The first version prepared for release, renamed from read-aloud.
   read-along in `enabledPlugins` that draws there without passing the band
   on), read-along says so once, shows the player on the line under the
   prompt meanwhile, and `/read-along doctor` reports it.
+- "Read thinking updates" (off by default; `/read-along auto thinking on`):
+  with auto-read `all`, also read Claude's thinking, for setups that show it
+  as updates in the transcript, where a step can show only thinking before its
+  tool call.
 - Auto-read (`all`) reads each of Claude's updates as soon as its text is
   written, rather than once the step's tool call has streamed in, which for a
   long command or file came a minute late and never for a step cut short.

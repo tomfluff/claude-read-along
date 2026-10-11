@@ -103,6 +103,7 @@ const defaults = (): ReadAlongSettings => ({
   duckOthers: str('duckOthers', 'off'),
   autoReadReplies: str('autoReadReplies', 'off'),
   autoReadMine: bool('autoReadMine', false),
+  readThinking: bool('readThinking', false),
 })
 /** The message buttons' form on a surface. The phone has no pointer to hover with, so it shows them. */
 const buttons = (surface: RenderSurface = 'terminal') => {
@@ -389,6 +390,7 @@ async function saveDefaults($: $) {
     ['duckOthers', s.duckOthers],
     ['autoReadReplies', s.autoReadReplies],
     ['autoReadMine', s.autoReadMine],
+    ['readThinking', s.readThinking],
   ]
   const refused: string[] = []
   for (const [field, value] of fields) {
@@ -787,7 +789,7 @@ const HELP = [
   '/read-along speed 1.5',
   '/read-along voice NAME      the main voice; voice ja NAME for Japanese, and so on',
   '/read-along voices [GROUP]  list the installed voices',
-  '/read-along auto replies off|final|all, auto mine on|off',
+  '/read-along auto replies off|final|all, auto mine on|off, auto thinking on|off',
   "/read-along save            make this session's choices the defaults",
   '/read-along doctor          what works on this machine, and what to install',
   '/read-along setup           ask Claude to install the Kokoro voices',
@@ -845,8 +847,13 @@ export const register: Register = (on, options) => {
   // which for a long command or file came a minute late, and never for a
   // step cut short. (Those updates never reach the transcript as their own
   // rows, so listening to session.append missed them.)
+  //
+  // With `readThinking`, the thinking blocks too: some setups show thinking as
+  // short updates in the transcript, so a step can show only thinking before
+  // its tool call. Off by default, as a mod can't tell whether it's shown.
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId !== undefined || (await settings($)).autoReadReplies !== 'all') return yield* next(e)
+    const s = await settings($)
+    if (e.agentId !== undefined || s.autoReadReplies !== 'all') return yield* next(e)
     let block: number | undefined
     let text = ''
     const flush = async () => {
@@ -855,11 +862,11 @@ export const register: Register = (on, options) => {
       text = ''
     }
     for await (const chunk of next(e)) {
-      if (chunk.kind === 'text') {
+      if (chunk.kind === 'text' || (chunk.kind === 'thinking' && s.readThinking)) {
         if (block !== undefined && chunk.index !== block) await flush()
         block = chunk.index
         text += chunk.text
-      } else if (chunk.kind === 'tool' || chunk.kind === 'stop') {
+      } else if (chunk.kind === 'tool' || chunk.kind === 'stop' || chunk.kind === 'thinking') {
         await flush()
       }
       yield chunk
@@ -920,7 +927,11 @@ export const register: Register = (on, options) => {
           await setSettings($, { autoReadMine: value === 'on' })
           return { text: `Auto-read my messages: ${value}.` }
         }
-        return { text: 'Usage: /read-along auto replies off|final|all, or auto mine on|off' }
+        if (what === 'thinking' && ['on', 'off'].includes(value)) {
+          await setSettings($, { readThinking: value === 'on' })
+          return { text: `Read thinking updates: ${value}${value === 'on' && (await settings($)).autoReadReplies !== 'all' ? ' (with auto-read replies set to all)' : ''}.` }
+        }
+        return { text: 'Usage: /read-along auto replies off|final|all, auto mine on|off, or auto thinking on|off' }
       }
       case 'save':
         return { text: await saveDefaults($) }
@@ -1087,6 +1098,13 @@ export const register: Register = (on, options) => {
           {(['off', 'on'] as const).map(v => (
             <Button key={`mine-${v}`} label={v} variant={pick(s.autoReadMine === (v === 'on'))} onPress={() => setSettings($, { autoReadMine: v === 'on' })} />
           ))}
+        </Box>
+        <Box columnGap={1}>
+          <Text bold>Read thinking updates</Text>
+          {(['off', 'on'] as const).map(v => (
+            <Button key={`thinking-${v}`} label={v} variant={pick(s.readThinking === (v === 'on'))} onPress={() => setSettings($, { readThinking: v === 'on' })} />
+          ))}
+          <Text dimColor>with auto-read all</Text>
         </Box>
         <Box columnGap={1}>
           <Button key="save" variant="primary" label="save as defaults" onPress={async () => $.ui.toast(await saveDefaults($))} />

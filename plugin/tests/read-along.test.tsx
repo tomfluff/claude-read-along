@@ -198,3 +198,26 @@ test('a band passed on is not reported, and the check redraws no message', async
   expect(toasts).toEqual([])
   expect(messageDraws).toBe(before)
 })
+
+for (const readThinking of [true, false]) {
+  test(`thinking shown as an update is read only with readThinking (${readThinking ? 'on' : 'off'})`, { options: { autoReadReplies: 'all', readThinking } }, async ($, on) => {
+    const spoken: string[] = []
+    mock.env(on, { USER: 'tester' })
+    on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+    on('http.fetch', async ($, e) => {
+      if (e.url.endsWith('/speak')) spoken.push(JSON.parse(String(e.init?.body)).text)
+      return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ state: 'idle', queue: 0 }) } }
+    })
+    on('turn.step', async function* () {
+      yield { kind: 'thinking', index: 0, text: "I'll check the reference links " }
+      yield { kind: 'thinking', index: 0, text: 'first.' }
+      yield { kind: 'tool', index: 1, id: 't1', name: 'Bash' }
+      yield { kind: 'stop', stopReason: 'tool_use', usage: null }
+      return { turnId: 'turn', index: 0, answer: '', toolUses: [], stopReason: 'tool_use', usage: null }
+    })
+    for await (const _ of $.turn.step({ turnId: 'turn', index: 0, model: 'm', messageCount: 1 })) {
+      // drain the stream as the engine does
+    }
+    expect(spoken).toEqual(readThinking ? ["I'll check the reference links first."] : [])
+  })
+}

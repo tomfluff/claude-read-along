@@ -33,6 +33,8 @@ export type ReadAlongSettings = {
   duckOthers: string
   autoReadReplies: string
   autoReadMine: boolean
+  /** With auto-read `all`, also read the thinking blocks (shown as updates in some setups). */
+  readThinking: boolean
 }
 
 /** Which message is being read, and the sentence heard now. */

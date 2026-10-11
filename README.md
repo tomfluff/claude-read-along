@@ -122,6 +122,7 @@ repository and run `claude plugin validate .` in it.
 | `/read-along voices` | list the installed voices |
 | `/read-along auto replies all` | auto-read: `off`, `final` (each turn's last reply) or `all` |
 | `/read-along auto mine on` | also read your own messages |
+| `/read-along auto thinking on` | with auto-read `all`, also read Claude's thinking where it's shown as updates |
 | `/read-along save` | keep this session's choices as the defaults |
 | `/read-along doctor` | what works on this machine and what to install |
 | `/read-along setup` | ask Claude to set up the Kokoro voices |
@@ -138,6 +139,7 @@ All in `/config` under read-along.
 | Volume | 100 | Percent, 0 to 200. |
 | Auto-read Claude's replies | off | `off`, `final`, `all`. |
 | Auto-read my messages | off | |
+| Read thinking updates | off | With auto-read `all`, also read Claude's thinking. Turn it on where your Claude Code shows thinking as updates in the transcript; Claude Code doesn't tell read-along whether it's shown. |
 | Read code blocks | off | Off says "code block" instead. |
 | Highlight | `reverse` | Swaps text and background colours, which works on any theme. Or a colour: `yellow`, `#f1fa8c/#282a36` (background/text). |
 | Message buttons | hover | `hover`, `glyph` (only over a ♪ at the message's right; no flashing while scrolling), `always`, `off`. |

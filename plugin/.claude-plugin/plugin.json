@@ -55,6 +55,12 @@
       "description": "Read each message you send.",
       "default": false
     },
+    "readThinking": {
+      "type": "boolean",
+      "title": "Read thinking updates",
+      "description": "With auto-read 'all', also read Claude's thinking where your Claude Code shows it as updates. Off by default: Claude Code doesn't tell read-along whether thinking is on screen.",
+      "default": false
+    },
     "readCode": {
       "type": "boolean",
       "title": "Read code blocks",
