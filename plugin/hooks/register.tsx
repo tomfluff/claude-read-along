@@ -733,8 +733,8 @@ export function layoutTable(lines: string[], readLine: number): TableLayout | un
 
 /**
  * A message whose sentence being heard is a table row, drawn by the mod: the
- * table in Claude Code's box-drawing style, the row being read bold and on the
- * highlight's background, the text around it markdown. Claude Code draws its
+ * table in Claude Code's box-drawing style (a rule between every row), the row
+ * being read on the highlight's background, the text around it markdown. Claude Code draws its
  * own tables, which take no background. Undefined where the table doesn't fit
  * the width, which leaves Claude Code's table with the row in bold.
  */
@@ -771,7 +771,7 @@ function drawTable($: $, e: MessageEvent, raw: string, at: { start: number; end:
         const align = table.aligns[c] ?? 'left'
         const left = align === 'right' ? gap : align === 'center' ? Math.floor(gap / 2) : 0
         const paint = r.isRead ? hl : {}
-        const bold = r.isHeader || r.isRead ? { bold: true as const } : {}
+        const bold = r.isHeader ? { bold: true as const } : {}
         return (
           <Text>
             <Text {...paint}>{' '.repeat(left + 1)}</Text>
@@ -794,7 +794,7 @@ function drawTable($: $, e: MessageEvent, raw: string, at: { start: number; end:
         {before ? [<Markdown text={before} />] : []}
         <Box flexDirection="column" marginTop={before ? 1 : 0}>
           {rule('┌', '┬', '┐')}
-          {table.rows.flatMap((r, i) => (i === 0 && table.rows.length > 1 ? [row(r), rule('├', '┼', '┤')] : [row(r)]))}
+          {table.rows.flatMap((r, i) => (i < table.rows.length - 1 ? [row(r), rule('├', '┼', '┤')] : [row(r)]))}
           {rule('└', '┴', '┘')}
         </Box>
         {after

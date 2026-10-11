@@ -18,7 +18,7 @@ on WSL; on Linux and macOS it passes CI but hasn't been tried by hand yet.
   turn plain while highlighted.
 - A web address in the line being read keeps the highlight's background.
 - A table row being read is highlighted too: read-along draws the whole table
-  in Claude Code's box style with that row bold on the highlight's background
+  in Claude Code's box style with that row on the highlight's background
   (a table too wide for the window keeps Claude Code's drawing, the row in
   bold). Table rows had no highlight before.
 - "Read thinking updates" (off by default; `/read-along auto thinking on`):

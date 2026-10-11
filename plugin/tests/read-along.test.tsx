@@ -271,7 +271,7 @@ test('a table lays out with its widths, alignments and the row being read', asyn
   expect(layoutTable(['| a | b |', '| c | d |'], 1)).toBeUndefined() // no separator row: not a table
 })
 
-test('a table row being read is drawn as a whole table, the row on the highlight', { options: { highlight: '#7d1010/#ffffff' } }, async ($, on) => {
+test('a table row being read is drawn as a whole table, a rule between rows, the row on the highlight', { options: { highlight: '#7d1010/#ffffff' } }, async ($, on) => {
   const clock = mock.clock(on)
   mock.env(on, { USER: 'tester' })
   const reply = 'The voices:\n\n| Voice | Language |\n|---|---|\n| heart | English |\n| alpha | Japanese |\n\nThat is all.'
@@ -290,6 +290,7 @@ test('a table row being read is drawn as a whole table, the row on the highlight
   const drawn = JSON.stringify(await ui.drawn())
   expect(drawn).toContain('┌───────┬──────────┐')
   expect(drawn).toContain('├───────┼──────────┤')
-  expect(drawn).toContain('"bold":true,"backgroundColor":"#7d1010","color":"#ffffff"},"children":["heart"]')
+  expect(drawn).toContain('{"backgroundColor":"#7d1010","color":"#ffffff"},"children":["heart"]') // the background, not bold
+  expect(drawn.split('├───────┼──────────┤').length - 1).toBe(2) // under the header and between the two rows
   expect(drawn).toContain('That is all.')
 })
