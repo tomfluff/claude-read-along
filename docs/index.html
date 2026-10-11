@@ -58,6 +58,10 @@ header.hero {
   padding: max(3px, .7cqw) max(7px, 1.7cqw); font: 700 max(10px, 2.2cqw)/1.3 'JetBrains Mono', monospace; white-space: nowrap;
   box-shadow: 0 1cqw 2.4cqw -1.4cqw rgba(0, 0, 0, .6);
 }
+.bubble.more {
+  background: transparent; color: var(--accent); border: 2px dashed var(--accent); box-shadow: none; text-decoration: none; z-index: 2;
+}
+.bubble.more:hover { background: var(--accent); color: var(--bg); border-style: solid; }
 .bubble[lang="ja"], .bubble[lang="ko"] { font-family: 'Noto Sans JP', 'Noto Sans KR', sans-serif; font-weight: 500; }
 .mascot { position: absolute; left: 63.6%; width: 29.5%; bottom: -12%; z-index: 2; pointer-events: none; }
 .hero-demo .term { position: relative; z-index: 1; margin: 0; }
@@ -190,6 +194,9 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
       <span class="bubble" style="left:50%;top:61%">Hello!</span>
       <img class="mascot" src="mascot.png" alt="">
     </div>
+    <div class="sky">
+      <a class="bubble more" href="#languages" style="left:0;top:20%">+ many more</a>
+    </div>
       <section class="term" aria-label="Read-along demo: a mock Claude Code terminal" tabindex="-1">
         <div class="bar"><i></i><i></i><i></i><span>claude · ~/projects/app</span></div>
         <div class="body">
@@ -239,6 +246,16 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
     <li><strong>Local and private.</strong> Speech is made on your machine. Nothing you read is sent anywhere.</li>
     <li><strong>Fast without chipmunk voices.</strong> Speeds up to 4× keep the voice's pitch.</li>
   </ul>
+
+  <h2 id="languages">Languages</h2>
+  <p>Read-along uses whatever voices your machine has, and picks one for each sentence, so a reply that mixes languages is read in each of them.</p>
+  <ul class="features">
+    <li><strong>Kokoro</strong>, the natural voices: English (US and UK), Japanese, Chinese, Spanish, French, Hindi, Italian and Portuguese. See <a href="https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md">Kokoro's voices</a>.</li>
+    <li><strong>The macOS voices</strong>: dozens of languages, with Enhanced and Premium voices as free downloads. See <a href="https://support.apple.com/guide/mac-help/change-the-voice-your-mac-uses-to-speak-text-mchlp2290/mac">Apple's guide</a>.</li>
+    <li><strong>The Windows voices</strong>, from WSL: the languages added under Settings → Time &amp; language → Speech.</li>
+    <li><strong>eSpeak NG</strong>: about 100 languages, robotic but on any Linux. See <a href="https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md">its languages</a>.</li>
+  </ul>
+  <p>Korean, Hebrew, Arabic, Russian, Greek, Thai and the rest are read with the system voices or eSpeak NG.</p>
 
   <h2 id="hear-it">Hear it</h2>
   <p>More Kokoro voices, made with read-along's own setup on a laptop CPU, in other languages too. The sentence is highlighted while it plays.</p>

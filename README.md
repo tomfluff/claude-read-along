@@ -69,7 +69,9 @@ opens a short MP3.
 | eSpeak NG | Linux, WSL | robotic, but about 100 languages | `sudo apt install espeak-ng` |
 
 Kokoro speaks English (US and UK), Japanese, Chinese, Spanish, French, Hindi,
-Italian and Portuguese. Other languages use the system voices or eSpeak NG.
+Italian and Portuguese ([its voices](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)).
+Other languages use the system voices or eSpeak NG
+([its languages](https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md)).
 
 ## Install
 
