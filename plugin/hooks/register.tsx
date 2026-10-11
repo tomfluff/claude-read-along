@@ -808,6 +808,7 @@ export const register: Register = (on, options) => {
     ticker?.cancel()
     ticker = $.clock.every(400, () => tick($))
     checkBandSoon()
+    $.ui.status(undefined) // read-along pins no status line; clear one an older version left
     // Start the service and load the voices now, so the first read starts at once.
     void (async () => {
       try {
