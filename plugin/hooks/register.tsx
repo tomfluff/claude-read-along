@@ -476,7 +476,7 @@ const hash = (text: string) => {
 }
 
 /** The handle a message's row and its read share: who wrote it and its text. */
-const messageKey = (who: 'a' | 'u', text: string) => `${who}:${hash(text.trim())}`
+export const messageKey = (who: 'a' | 'u', text: string) => `${who}:${hash(text.trim())}`
 
 /**
  * The service hears a sentence with the markdown taken out, so the mod finds
@@ -622,7 +622,8 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
   const lineEnd = raw.indexOf('\n', at.end) < 0 ? raw.length : raw.indexOf('\n', at.end)
   const line = raw.slice(lineStart, lineEnd)
   const fences = (raw.slice(0, lineStart).match(/^\s*```/gm) ?? []).length
-  if (/^\s*\|/.test(line) || fences % 2 === 1) return undefined
+  if (fences % 2 === 1) return undefined
+  if (/^\s*\|/.test(line)) return drawTable($, e, raw, at, lead)
 
   const { Box, Text, Markdown, Link } = $.ui.resolve(e)
   const before = raw.slice(0, lineStart).replace(/\s+$/, '')
@@ -675,6 +676,130 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
         {after
           ? [
               <Box marginTop={gapAfter}>
+                <Markdown text={after} />
+              </Box>,
+            ]
+          : []}
+      </Box>
+    </Box>
+  )
+}
+
+/** Cells a string takes in the terminal: wide CJK and emoji two, marks none. */
+const cellWidth = (text: string) => {
+  let w = 0
+  for (const ch of text) {
+    if (/\p{M}/u.test(ch)) continue
+    w += /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|\p{Extended_Pictographic}/u.test(ch) ? 2 : 1
+  }
+  return w
+}
+
+export type TableLayout = {
+  widths: number[]
+  aligns: ('left' | 'right' | 'center')[]
+  /** Each row's cells as inline runs; the separator row is left out. */
+  rows: { cells: InlineRun[][]; isHeader: boolean; isRead: boolean }[]
+}
+
+/**
+ * A markdown table laid out to draw: its rows (header first), each cell's
+ * inline runs, the columns' widths and alignments. `readLine` is the index,
+ * among `lines`, of the row being read. Undefined if it isn't a table.
+ */
+export function layoutTable(lines: string[], readLine: number): TableLayout | undefined {
+  const split = (line: string) =>
+    line
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/(?<!\\)\|$/, '')
+      .split(/(?<!\\)\|/)
+      .map(c => c.trim().replace(/\\\|/g, '|'))
+  const sep = lines.findIndex(l => /^\s*\|?(\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?\s*$/.test(l))
+  if (sep !== 1) return undefined
+  const aligns = split(lines[1] ?? '').map(c => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : 'left') as TableLayout['aligns'][number])
+  const rows = lines
+    .map((line, i) => ({ line, i }))
+    .filter(({ i }) => i !== sep)
+    .map(({ line, i }) => {
+      const isRead = i === readLine
+      const cells = split(line).map(c => inlineRuns(c, 0, c.length, isRead ? { start: 0, end: c.length } : { start: 0, end: 0 }))
+      return { cells, isHeader: i === 0, isRead }
+    })
+  const columns = Math.max(...rows.map(r => r.cells.length))
+  const widths = Array.from({ length: columns }, (_, c) => Math.max(1, ...rows.map(r => cellWidth((r.cells[c] ?? []).map(x => x.text).join('')))))
+  return { widths, aligns: Array.from({ length: columns }, (_, c) => aligns[c] ?? 'left'), rows }
+}
+
+/**
+ * A message whose sentence being heard is a table row, drawn by the mod: the
+ * table in Claude Code's box-drawing style, the row being read bold and on the
+ * highlight's background, the text around it markdown. Claude Code draws its
+ * own tables, which take no background. Undefined where the table doesn't fit
+ * the width, which leaves Claude Code's table with the row in bold.
+ */
+function drawTable($: $, e: MessageEvent, raw: string, at: { start: number; end: number }, lead: string): RenderElement | undefined {
+  // The table: the run of `|` lines around the sentence.
+  const starts = [0, ...[...raw.matchAll(/\n/g)].map(m => (m.index ?? 0) + 1)]
+  const lineOf = (pos: number) => starts.findLastIndex(st => st <= pos)
+  const lineText = (i: number) => raw.slice(starts[i] ?? raw.length, (starts[i + 1] ?? raw.length + 1) - 1)
+  const isRow = (i: number) => i >= 0 && i < starts.length && /^\s*\|/.test(lineText(i))
+  const at0 = lineOf(at.start)
+  let first = at0
+  let last = at0
+  while (isRow(first - 1)) first--
+  while (isRow(last + 1)) last++
+  const lines = Array.from({ length: last - first + 1 }, (_, k) => lineText(first + k))
+  const table = layoutTable(lines, at0 - first)
+  if (!table) return undefined
+  const total = table.widths.reduce((a, w) => a + w + 3, 1)
+  if (total > (e.viewport?.columns ?? 100) - 4) return undefined
+
+  const { Box, Text, Markdown } = $.ui.resolve(e)
+  const hl = highlightProps(str('highlight', 'reverse'))
+  const tableStart = starts[first] ?? 0
+  const tableEnd = (starts[last + 1] ?? raw.length + 1) - 1
+  const before = raw.slice(0, tableStart).replace(/\s+$/, '')
+  const after = raw.slice(tableEnd).replace(/^\s+/, '')
+  const rule = (l: string, m: string, r: string) => <Text>{l + table.widths.map(w => '─'.repeat(w + 2)).join(m) + r}</Text>
+  const row = (r: TableLayout['rows'][number]) => (
+    <Text>
+      {'│'}
+      {table.widths.map((w, c) => {
+        const runs = r.cells[c] ?? []
+        const gap = w - cellWidth(runs.map(x => x.text).join(''))
+        const align = table.aligns[c] ?? 'left'
+        const left = align === 'right' ? gap : align === 'center' ? Math.floor(gap / 2) : 0
+        const paint = r.isRead ? hl : {}
+        const bold = r.isHeader || r.isRead ? { bold: true as const } : {}
+        return (
+          <Text>
+            <Text {...paint}>{' '.repeat(left + 1)}</Text>
+            {runs.map(x => (
+              <Text {...x.style} {...bold} {...paint}>
+                {x.text}
+              </Text>
+            ))}
+            <Text {...paint}>{' '.repeat(gap - left + 1)}</Text>
+            {'│'}
+          </Text>
+        )
+      })}
+    </Text>
+  )
+  return (
+    <Box flexDirection="row" marginTop={1}>
+      <Text>{lead}</Text>
+      <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+        {before ? [<Markdown text={before} />] : []}
+        <Box flexDirection="column" marginTop={before ? 1 : 0}>
+          {rule('┌', '┬', '┐')}
+          {table.rows.flatMap((r, i) => (i === 0 && table.rows.length > 1 ? [row(r), rule('├', '┼', '┤')] : [row(r)]))}
+          {rule('└', '┴', '┘')}
+        </Box>
+        {after
+          ? [
+              <Box marginTop={1}>
                 <Markdown text={after} />
               </Box>,
             ]

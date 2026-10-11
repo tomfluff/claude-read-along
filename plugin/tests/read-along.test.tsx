@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { formatVoices, highlightProps, inlineRuns, markSentence, parseVoices, voiceName } from '../hooks/register'
+import { formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, voiceName } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -259,4 +259,37 @@ test('a table row being read gets its cells in bold', async () => {
   const raw = 'Voices:\n\n| Voice | Language |\n|---|---|\n| heart | English |\n| alpha | Japanese |'
   expect(markSentence(raw, 'heart, English.')).toBe('Voices:\n\n| Voice | Language |\n|---|---|\n| **heart** | **English** |\n| alpha | Japanese |')
   expect(markSentence(raw, 'Voice, Language.')).toContain('| **Voice** | **Language** |')
+})
+
+test('a table lays out with its widths, alignments and the row being read', async () => {
+  const lines = ['| Voice | Language | Speed |', '|:--|:-:|--:|', '| **heart** | English | 1.5 |', '| alpha | 日本語 | 2 |']
+  const t = layoutTable(lines, 3)
+  expect(t?.widths).toEqual([5, 8, 5]) // 日本語 takes six cells
+  expect(t?.aligns).toEqual(['left', 'center', 'right'])
+  expect(t?.rows.map(r => [r.isHeader, r.isRead])).toEqual([[true, false], [false, false], [false, true]])
+  expect(t?.rows[1]?.cells[0]).toEqual([{ text: 'heart', style: { bold: true }, isRead: false }])
+  expect(layoutTable(['| a | b |', '| c | d |'], 1)).toBeUndefined() // no separator row: not a table
+})
+
+test('a table row being read is drawn as a whole table, the row on the highlight', { options: { highlight: '#7d1010/#ffffff' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  mock.env(on, { USER: 'tester' })
+  const reply = 'The voices:\n\n| Voice | Language |\n|---|---|\n| heart | English |\n| alpha | Japanese |\n\nThat is all.'
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', async ($, e) => {
+    const status = e.url.endsWith('/status') ? { state: 'playing', key: messageKey('a', reply), label: 'reply', text: 'heart, English.', sentence: 1, sentences: 3, queue: 0 } : { state: 'idle', queue: 0 }
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(status) } }
+  })
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
+  on('session.start', async ($, e) => ({ cwd: e.cwd }))
+  on('command.register', async ($, e) => ({ value: { command: e.name } }))
+  on('ui.status', async () => ({ value: undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await clock.advance(3300) // the clock's idle check asks the service, which is reading the row
+  const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'AssistantMessage', props: { text: reply, isFirstOfReply: true }, requestId: 't1' })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toContain('┌───────┬──────────┐')
+  expect(drawn).toContain('├───────┼──────────┤')
+  expect(drawn).toContain('"bold":true,"backgroundColor":"#7d1010","color":"#ffffff"},"children":["heart"]')
+  expect(drawn).toContain('That is all.')
 })
