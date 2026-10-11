@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Read-along for Claude Code</title>
+<meta name="description" content="A mod for Claude Code: Claude's replies read aloud, with the sentence you're hearing highlighted. Local voices; nothing is sent anywhere.">
+<meta property="og:title" content="Read-along for Claude Code">
+<meta property="og:description" content="Claude's replies, read aloud, with the sentence you're hearing highlighted.">
+<meta property="og:image" content="https://sechayk.com/claude-read-along/banner-light.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+JP:wght@500&display=swap" rel="stylesheet">
+<style>
+/* The banner's palette: ivory and ink, terracotta for the accent, and the
+   highlight pale on dark and deep on light so the text on it always reads. */
+:root {
+  --bg: #F0EEE6; --ink: #141413; --muted: #5E5B55; --accent: #B5522F; --rule: #D9D6CC;
+  --card: #FAF9F5; --code-bg: #1F1E1D; --code-ink: #E8E6DC;
+  --hl-bg: #8E3B22; --hl-fg: #FFF6EF; --focus: #2F6FB0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413; --ink: #F0EEE6; --muted: #B4B0A6; --accent: #E08A68; --rule: #34322F;
+    --card: #1F1E1D; --code-bg: #FAF9F5; --code-ink: #1F1E1D;
+    --hl-bg: #F7D4C2; --hl-fg: #141413; --focus: #9DC4E8;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 400 1.1875rem/1.65 'Atkinson Hyperlegible', system-ui, sans-serif;
+}
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 16px; background: var(--card); padding: 8px 12px; z-index: 1; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:hover { color: var(--accent); }
+
+header.hero { max-width: 1280px; margin: 0 auto; padding: 24px 16px 0; }
+header.hero img { display: block; width: 100%; height: auto; border-radius: 14px; }
+main { max-width: 46rem; margin: 0 auto; padding: 8px 16px 64px; }
+h1, h2, h3 { font-family: 'JetBrains Mono', monospace; letter-spacing: -.02em; line-height: 1.2; }
+h1 { font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 800; margin: 40px 0 8px; }
+h1 .dash { color: var(--accent); }
+.kicker { font: 700 .95rem/1 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 40px 0 0; }
+.lede { font-size: 1.375rem; margin: 12px 0 0; }
+h2 { font-size: 1.5rem; font-weight: 700; margin: 56px 0 12px; padding-top: 16px; border-top: 1px solid var(--rule); }
+h3 { font-size: 1.1rem; margin: 0; }
+p, li { max-width: 68ch; }
+ul.features { padding-left: 1.2em; }
+ul.features li { margin: 8px 0; }
+mark, .hl { background: var(--hl-bg); color: var(--hl-fg); padding: 0 .2em; border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+code { font-family: 'JetBrains Mono', monospace; font-size: .9em; }
+pre {
+  background: var(--code-bg); color: var(--code-ink); padding: 14px 16px; border-radius: 10px;
+  overflow-x: auto; font-size: .95rem; line-height: 1.5;
+}
+pre code { font-size: inherit; }
+.note { color: var(--muted); }
+
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0 0; }
+.cta a {
+  font: 700 1rem/1 'JetBrains Mono', monospace; text-decoration: none; padding: 12px 16px;
+  border-radius: 10px; border: 2px solid var(--ink);
+}
+.cta a.primary { background: var(--ink); color: var(--bg); }
+.cta a.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+.samples { display: grid; gap: 14px; margin: 16px 0 0; padding: 0; list-style: none; }
+.sample { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; }
+.sample .head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.sample .voice { font: 500 .9rem/1.3 'JetBrains Mono', monospace; color: var(--muted); }
+.sample p { margin: 8px 0 12px; }
+.sample p[lang="ja"] { font-family: 'Noto Sans JP', 'Atkinson Hyperlegible', sans-serif; }
+.sample audio { width: 100%; }
+.sample .also { margin: 10px 0 0; font-size: 1rem; }
+.sample .also audio { margin-top: 6px; }
+
+table { border-collapse: collapse; width: 100%; font-size: 1.05rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-family: 'JetBrains Mono', monospace; font-size: .9rem; }
+.table-wrap { overflow-x: auto; }
+/* The title in text: the banner shows it on wide screens, so it's there
+   for screen readers only; on a phone the banner's text is too small. */
+@media (min-width: 720px) {
+  .title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .lede { margin-top: 32px; }
+}
+
+/* The mock terminal, flipped against the page as on the banner: dark on the
+   light page, light on the dark one, with the highlight that reads on it. */
+.term {
+  --t-bg: #1F1E1D; --t-edge: #34322F; --t-ink: #E8E6DC; --t-dim: #8A877E; --t-line: #2B2A27; --t-dot: #45433F;
+  --t-code: #9DC4E8; --t-hl-bg: #F7D4C2; --t-hl-fg: #141413; --t-band: #E9B872;
+  margin: 18px 0 0; background: var(--t-bg); color: var(--t-ink); border: 1px solid var(--t-edge);
+  border-radius: 12px; font: 400 .95rem/1.6 'JetBrains Mono', monospace; overflow: hidden;
+  box-shadow: 0 30px 60px -30px rgba(20, 20, 19, .5);
+}
+@media (prefers-color-scheme: dark) {
+  .term {
+    --t-bg: #FAF9F5; --t-edge: #D9D6CC; --t-ink: #1F1E1D; --t-dim: #6E6B64; --t-line: #ECE9E1; --t-dot: #CFCBC0;
+    --t-code: #2F6FB0; --t-hl-bg: #8E3B22; --t-hl-fg: #FFF6EF; --t-band: #9A5410;
+    box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8);
+  }
+}
+.term:focus { outline: none; }
+.term:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.term .bar { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid var(--t-line); }
+.term .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--t-dot); }
+.term .bar span { margin-left: 8px; font-size: .8rem; color: var(--t-dim); }
+.term .body { padding: 14px 18px 0; }
+.term p { margin: 0; max-width: none; }
+.term .you { color: var(--t-dim); margin-bottom: 12px; }
+.term .you b { color: var(--t-ink); font-weight: 400; background: var(--t-line); padding: 2px 6px; }
+.term .msg { position: relative; padding-left: 20px; }
+.term .msg::before { content: '●'; position: absolute; left: 0; }
+.term .reply code { color: var(--t-code); font-size: 1em; }
+.term .reply [data-s] { transition: background-color .15s; }
+.term .reply .on { background: var(--t-hl-bg); color: var(--t-hl-fg); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.term .reply .on code { color: inherit; font-weight: 700; }
+.term button {
+  font: inherit; color: var(--t-ink); background: var(--t-line); border: 0; border-radius: 3px;
+  min-width: 30px; height: 28px; padding: 0 7px; cursor: pointer; display: inline-grid; place-items: center;
+}
+.term button:hover { background: var(--t-edge); }
+.term button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.term svg { width: .6em; height: 1.32em; display: block; }
+.term .btns { float: right; display: flex; gap: 6px; margin: 0 0 6px 14px; }
+@media (max-width: 520px) { .term .btns { float: none; justify-content: flex-end; margin: 0 0 8px; } }
+.term .voice-btn { font-size: .85rem; }
+.term .band {
+  margin: 14px -18px 0; padding: 8px 18px; border-top: 1px solid var(--t-line); color: var(--t-band);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: .9rem;
+}
+.term .who { display: inline-flex; align-items: center; gap: 8px; }
+.term .who svg { width: .6em; }
+.term .track { flex: 1 1 120px; height: 3px; background: var(--t-dim); opacity: .9; position: relative; border-radius: 2px; }
+.term .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--t-band); border-radius: 2px; }
+.term .dim { color: var(--t-dim); }
+.term .ctl { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
+.term .speed { color: var(--t-ink); background: var(--t-line); padding: 2px 7px; border-radius: 3px; }
+.term .prompt { margin: 0 -18px; padding: 10px 18px 14px; border-top: 1px solid var(--t-line); color: var(--t-dim); display: flex; gap: 8px; align-items: center; }
+.term .caret { width: 9px; height: 18px; background: var(--t-ink); display: inline-block; }
+kbd { font: 500 .85em 'JetBrains Mono', monospace; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em; }
+
+footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 1rem; }
+@media (prefers-reduced-motion: no-preference) { .sample p { transition: background-color .2s; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<header class="hero">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="banner-dark.png">
+    <img src="banner-light.png" width="2400" height="960" alt="A terminal shows one of Claude's replies with the sentence being read highlighted and a player bar under it, while a small orange robot with headphones lies on the terminal saying hello in Korean, Japanese, Spanish and English.">
+  </picture>
+</header>
+
+<main id="main">
+  <div class="title">
+  <p class="kicker">A mod for Claude Code</p>
+  <h1>Read<span class="dash">-</span>along</h1>
+  </div>
+  <p class="lede">Listen to Claude's replies in the terminal while <mark>the sentence being read</mark> is highlighted, so you can follow along with your eyes and ears together.</p>
+  <div class="cta">
+    <a class="primary" href="#install">Install</a>
+    <a href="#try">Try it</a>
+    <a href="#hear-it">More voices</a>
+    <a href="https://github.com/tomfluff/claude-read-along">Code on GitHub</a>
+  </div>
+
+  <h2 id="try">Try it</h2>
+  <p>A mock of Claude Code with read-along in it. Press play, and the sentence being read is highlighted as it goes. Change the speed or the voice while it plays.</p>
+  <section class="term" aria-label="Read-along demo: a mock Claude Code terminal" tabindex="-1">
+    <div class="bar"><i></i><i></i><i></i><span>claude · ~/projects/app</span></div>
+    <div class="body">
+      <p class="you"><span aria-hidden="true">&gt; </span><b>why is the build failing?</b></p>
+      <div class="msg">
+        <div class="btns">
+          <button class="ico" data-act="toggle" aria-label="Play">PLAY</button>
+          <button class="ico" data-act="restart" aria-label="Read from the start">RESTART</button>
+          <button class="ico" data-act="slower" aria-label="Slower">SLOWER</button>
+          <button class="ico" data-act="faster" aria-label="Faster">FASTER</button>
+          <button class="voice-btn" data-act="voice" aria-label="Voice: heart. Press for the next voice">heart</button>
+        </div>
+        <p class="reply"><span data-s="0">The build fails because <code>parseVoices</code> moved, but two files still import it from the old place.</span> <span data-s="1">I pointed both imports at <b>voices.ts</b>, so the build passes again.</span> <span data-s="2">Then I ran the whole test suite, and all 42 tests pass.</span></p>
+      </div>
+      <div class="band">
+        <span class="who">SPEAKER <b class="vname">heart</b></span>
+        <span class="pos">0:00</span>
+        <span class="track" aria-hidden="true"><span class="fill"></span></span>
+        <span class="tot">0:00</span>
+        <span class="dim where">–/3</span>
+        <span class="ctl">
+          <button class="ico" data-act="toggle" aria-label="Play" data-key="p">PLAY</button>
+          <button class="ico" data-act="stop" aria-label="Stop" data-key="s">STOP</button>
+          <button class="ico" data-act="back" aria-label="Previous sentence" data-key="b">BACK</button>
+          <button class="ico" data-act="next" aria-label="Next sentence" data-key="n">FORWARD</button>
+          <span class="speed" aria-live="polite">1.25×</span>
+        </span>
+      </div>
+      <p class="prompt"><span aria-hidden="true">&gt; </span><span class="caret"></span></p>
+    </div>
+  </section>
+  <p class="note">With the demo focused, <kbd>p</kbd> plays and pauses, <kbd>s</kbd> stops, and <kbd>b</kbd> and <kbd>n</kbd> step between sentences, as in the terminal.</p>
+
+  <h2 id="who">Who it's for</h2>
+  <p>Anyone who would rather hear long replies than read them: people with dyslexia, low vision, ADHD or eye strain, people reading in a second language, and anyone who wants to look away from the screen while Claude explains something. It is not a screen reader and doesn't replace one.</p>
+
+  <h2 id="what">What it does</h2>
+  <ul class="features">
+    <li><strong>Play any message.</strong> Hover a message for its play, speed and voice buttons.</li>
+    <li><strong>Follow the highlight.</strong> The sentence being spoken is highlighted in the message.</li>
+    <li><strong>A player above the prompt.</strong> Pause, stop, skip back or forward, and change speed and voice.</li>
+    <li><strong>Auto-read.</strong> Have each reply read when it arrives, or every update Claude writes between tool calls too.</li>
+    <li><strong>Several languages in one reply.</strong> Japanese, Chinese, Korean, Hebrew, Arabic, Cyrillic, Hindi, Greek and Thai sentences each get their own voice.</li>
+    <li><strong>Local and private.</strong> Speech is made on your machine. Nothing you read is sent anywhere.</li>
+    <li><strong>Fast without chipmunk voices.</strong> Speeds up to 4× keep the voice's pitch.</li>
+  </ul>
+
+  <h2 id="hear-it">Hear it</h2>
+  <p>More Kokoro voices, made with read-along's own setup on a laptop CPU, in other languages too. The sentence is highlighted while it plays.</p>
+  <ul class="samples">
+    <li class="sample">
+      <div class="head"><h3>English (US), Heart</h3><span class="voice">kokoro:af_heart</span></div>
+      <p lang="en">Read-along reads Claude's replies aloud, and highlights each sentence as it goes, so you can follow with your eyes and ears together.</p>
+      <audio controls preload="none" src="samples/en-us-heart.mp3" aria-label="English, US, the Heart voice"></audio>
+      <div class="also">At 2× speed, same pitch:
+        <audio controls preload="none" src="samples/en-us-heart-2x.mp3" aria-label="English, US, the Heart voice at twice the speed"></audio>
+      </div>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>English (US), Fenrir</h3><span class="voice">kokoro:am_fenrir</span></div>
+      <p lang="en">Read-along reads Claude's replies aloud and highlights each sentence as it goes, so you can follow with your eyes and ears together.</p>
+      <audio controls preload="none" src="samples/en-us-fenrir.mp3" aria-label="English, US, the Fenrir voice"></audio>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>English (UK), Emma</h3><span class="voice">kokoro:bf_emma</span></div>
+      <p lang="en">Read-along reads Claude's replies aloud, and highlights each sentence as it goes, so you can follow with your eyes and ears together.</p>
+      <audio controls preload="none" src="samples/en-uk-emma.mp3" aria-label="English, UK, the Emma voice"></audio>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>Japanese, Alpha</h3><span class="voice">kokoro:jf_alpha</span></div>
+      <p lang="ja">読み上げ中の文がハイライトされるので、目と耳で一緒に追うことができます。</p>
+      <audio controls preload="none" src="samples/ja-alpha.mp3" aria-label="Japanese, the Alpha voice"></audio>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>Spanish, Dora</h3><span class="voice">kokoro:ef_dora</span></div>
+      <p lang="es">Este complemento lee en voz alta las respuestas de Claude y resalta cada frase mientras la lee.</p>
+      <audio controls preload="none" src="samples/es-dora.mp3" aria-label="Spanish, the Dora voice"></audio>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>French, Siwis</h3><span class="voice">kokoro:ff_siwis</span></div>
+      <p lang="fr">Ce module lit à voix haute les réponses de Claude et surligne chaque phrase pendant la lecture.</p>
+      <audio controls preload="none" src="samples/fr-siwis.mp3" aria-label="French, the Siwis voice"></audio>
+    </li>
+  </ul>
+
+  <h2 id="needs">What you need</h2>
+  <ul class="features">
+    <li><strong>Claude Code 2.1.287 or later, in the terminal.</strong> Mods also draw in the JetBrains plugin and the desktop app's Code tab, but not in its WSL sessions or over Remote Control.</li>
+    <li><strong>WSL, Linux or macOS.</strong> Native Windows isn't supported yet; use it through WSL.</li>
+    <li><strong>Python 3.9 or newer</strong> as <code>python3</code>, and an audio player: <code>ffplay</code> (comes with ffmpeg) or SoX's <code>play</code>.</li>
+    <li><strong>A voice engine.</strong> Kokoro sounds the most natural, and read-along can install it for you (about 1 GB; a CPU is fine). The macOS and Windows voices and eSpeak NG work too.</li>
+  </ul>
+
+  <h2 id="install">Install</h2>
+  <p>At the Claude Code prompt:</p>
+  <pre><code>/plugin install read-along --marketplace tomfluff/claude-read-along</code></pre>
+  <p>Answer <code>y</code> to add the marketplace, then pick the user scope. Then see what your machine has, and set up the Kokoro voices with Claude's help:</p>
+  <pre><code>/read-along doctor
+/read-along setup</code></pre>
+  <p class="note">Setup asks before it installs anything, and puts Kokoro in its own folder and nowhere else.</p>
+
+  <h2 id="use">Using it</h2>
+  <p>Hover a message and press play, or turn on auto-read with <code>/read-along auto replies all</code>. The player above the prompt pauses, stops and skips; with it focused (<kbd>ctrl</kbd>+<kbd>x</kbd> <kbd>tab</kbd>), <kbd>p</kbd> pauses, <kbd>s</kbd> stops, <kbd>b</kbd> and <kbd>n</kbd> go back and forward. <code>/read-along</code> opens the settings: a voice per language, speed, volume and auto-read.</p>
+  <p>The <a href="https://github.com/tomfluff/claude-read-along#readme">README</a> has every command and setting, and what to do when something doesn't work.</p>
+</main>
+
+<footer>
+  <p>Read-along is made by <a href="https://sechayk.com">Yotam Sechayk</a> and released under the MIT licence. It's an independent mod for Claude Code, not an Anthropic product.</p>
+</footer>
+
+<script>
+  // The demo: one audio file per voice, and each sentence's start and end in
+  // it (docs/demo/timings.json, made by tools/make_demo.py).
+  const TIMES = {"af_heart": [[0.0, 5.875], [6.175, 11.225], [11.525, 15.625]], "bf_emma": [[0.0, 5.975], [6.275, 11.525], [11.825, 16.075]], "am_fenrir": [[0.0, 6.05], [6.35, 11.55], [11.85, 15.875]]};
+  const ICON = {"speaker": "M459 725V639Q549 612 607.5 535.0Q666 458 666.0 360.0Q666 262 607.5 185.0Q549 108 459 81V-5Q541 15 607.5 67.5Q674 120 712.0 196.0Q750 272 750.0 360.0Q750 448 712.0 524.0Q674 600 607.5 652.5Q541 705 459 725ZM563 360Q563 415 534.5 460.0Q506 505 459 528V194Q506 215 534.5 260.0Q563 305 563 360ZM0 485V235H166L375 26V694L166 485Z", "play": "M72 651V69L528 360Z", "pause": "M384 69H550V651H384ZM50 69H216V651H50Z", "stop": "M550 110H50V610H550Z", "back": "M50 110V610H134V110ZM196 360 550 610V110Z", "forward": "M466 110H550V610H466ZM50 110 404 360 50 610Z", "slower": "M591 319H9V401H591Z", "faster": "M591 319H341V69H259V319H9V401H259V651H341V401H591Z", "restart": "M570 596Q523 641 462.5 667.5Q402 694 334 694Q244 694 167.0 649.0Q90 604 45.0 527.0Q0 450 0.0 360.0Q0 270 45.0 193.0Q90 116 167.0 71.0Q244 26 334 26Q449 26 538.0 96.5Q627 167 656 276H570Q543 204 478.5 157.0Q414 110 334 110Q266 110 208.0 143.0Q150 176 117.0 234.0Q84 292 84.0 360.0Q84 428 117.0 486.0Q150 544 208.0 577.0Q266 610 334 610Q385 610 430.0 590.5Q475 571 510 536L375 401H668V694Z"};
+  const svg = name => `<svg viewBox="0 -1020 600 1320" fill="currentColor" aria-hidden="true"><path transform="scale(1,-1)" d="${ICON[name]}"/></svg>`;
+  const term = document.querySelector('.term');
+  const icon = { PLAY: 'play', RESTART: 'restart', SLOWER: 'slower', FASTER: 'faster', STOP: 'stop', BACK: 'back', FORWARD: 'forward' };
+  for (const b of term.querySelectorAll('button.ico')) b.innerHTML = svg(icon[b.textContent.trim()]);
+  term.querySelector('.who').innerHTML = svg('speaker') + ' <b class="vname">heart</b>';
+
+  const voices = Object.keys(TIMES); // af_heart, bf_emma, am_fenrir
+  const short = v => v.split('_')[1];
+  const audio = new Audio();
+  audio.preload = 'none';
+  let v = 0, speed = 1.25;
+  const load = (at = 0) => {
+    audio.src = `demo/${voices[v]}.mp3`;
+    audio.playbackRate = speed;
+    if (at) audio.addEventListener('loadedmetadata', () => { audio.currentTime = at }, { once: true });
+  };
+  load();
+  const sentences = [...term.querySelectorAll('[data-s]')];
+  const marks = () => TIMES[voices[v]];
+  const total = () => marks()[marks().length - 1][1];
+  const current = t => { const m = marks(); let i = -1; for (let k = 0; k < m.length; k++) if (t >= m[k][0] - 0.05) i = k; return i; };
+  const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  function draw() {
+    const t = audio.currentTime, i = audio.paused && t === 0 ? -1 : current(t);
+    sentences.forEach((s, k) => s.classList.toggle('on', k === i));
+    term.querySelector('.fill').style.width = `${Math.min(100, (t / total()) * 100)}%`;
+    term.querySelector('.pos').textContent = clock(t / speed); // at the current speed, as the player shows it
+    term.querySelector('.tot').textContent = clock(total() / speed);
+    term.querySelector('.where').textContent = `${i < 0 ? '–' : i + 1}/${sentences.length}`;
+    for (const b of term.querySelectorAll('[data-act="toggle"]')) {
+      b.innerHTML = svg(audio.paused ? 'play' : 'pause');
+      b.setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+    }
+    term.querySelector('.speed').textContent = `${speed}×`;
+    for (const n of term.querySelectorAll('.vname')) n.textContent = short(voices[v]);
+    const vb = term.querySelector('.voice-btn');
+    vb.textContent = short(voices[v]);
+    vb.setAttribute('aria-label', `Voice: ${short(voices[v])}. Press for the next voice`);
+  }
+  let frame = 0;
+  const loop = () => { draw(); if (!audio.paused) frame = requestAnimationFrame(loop); };
+  audio.addEventListener('play', () => {
+    for (const other of document.querySelectorAll('.sample audio')) other.pause() // one voice at a time
+    cancelAnimationFrame(frame); loop();
+  });
+  window.demoAudio = audio;
+  for (const e of ['pause', 'ended', 'seeked', 'loadedmetadata']) audio.addEventListener(e, draw);
+  audio.addEventListener('ended', () => { audio.currentTime = 0; draw(); });
+
+  const seekTo = i => { const m = marks(); audio.currentTime = m[Math.max(0, Math.min(m.length - 1, i))][0]; };
+  const act = {
+    toggle: () => (audio.paused ? audio.play() : audio.pause()),
+    restart: () => { audio.currentTime = 0; audio.play(); },
+    stop: () => { audio.pause(); audio.currentTime = 0; draw(); },
+    back: () => { seekTo(Math.max(0, current(audio.currentTime) - 1)); if (audio.paused) audio.play(); },
+    next: () => { const i = current(audio.currentTime) + 1; if (i < sentences.length) { seekTo(i); if (audio.paused) audio.play(); } },
+    slower: () => { speed = Math.max(0.5, speed - 0.25); audio.playbackRate = speed; draw(); },
+    faster: () => { speed = Math.min(4, speed + 0.25); audio.playbackRate = speed; draw(); },
+    voice: () => {
+      // The next voice, from the same sentence.
+      const i = Math.max(0, current(audio.currentTime)), playing = !audio.paused;
+      v = (v + 1) % voices.length;
+      load(audio.currentTime > 0 ? marks()[i][0] : 0);
+      if (playing) audio.play();
+      draw();
+    },
+  };
+  term.addEventListener('click', e => { const b = e.target.closest('button[data-act]'); if (b) act[b.dataset.act](); });
+  term.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const b = term.querySelector(`button[data-key="${e.key.toLowerCase()}"]`);
+    if (b) { e.preventDefault(); act[b.dataset.act](); }
+  });
+  term.addEventListener('click', () => { if (!term.contains(document.activeElement)) term.focus(); });
+  draw();
+</script>
+<script>
+  // Highlight a sample's sentence while it plays, and play one sample at a time.
+  const players = [...document.querySelectorAll('.sample audio')]
+  for (const audio of players) {
+    const line = audio.closest('.sample').querySelector('p')
+    audio.addEventListener('play', () => {
+      for (const other of players) if (other !== audio) other.pause()
+      window.demoAudio?.pause()
+      line.classList.add('hl')
+    })
+    for (const end of ['pause', 'ended']) audio.addEventListener(end, () => line.classList.remove('hl'))
+  }
+</script>
+</body>
+</html>

@@ -974,14 +974,9 @@ export const register: Register = (on, options) => {
     if (e.surface === 'terminal') band.sawBand = true
     if (e.props.hasSurvey || bottomKind() !== 'band') return next(e)
     const others = await next(e)
-    const { Box, Text } = $.ui.resolve(e)
-    // A dim rule, like the one over the prompt, parts the band from the chat.
-    const cols = e.props.bodyColumns ?? e.viewport?.columns ?? 80
+    const { Box } = $.ui.resolve(e)
     return (
       <Box flexDirection="column">
-        <Text dimColor wrap="truncate-end">
-          {'─'.repeat(Math.max(1, cols))}
-        </Text>
         {await playerRow($, e)}
         {others}
       </Box>

@@ -59,4 +59,8 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
       or drag them into GitHub's editor) and put the user-attachments links
       in the README's "Hear it" table, so the samples play on the page.
       GitHub plays videos uploaded that way, never audio or repo files.
+- [ ] The web page (`docs/index.html`, with `docs/demo/` made by
+      `tools/make_demo.py`): turn on GitHub Pages from `main`, folder `/docs`.
+      It appears at https://sechayk.com/claude-read-along/; link it from the
+      README's top and its "Hear it" section.
 - [ ] Version 1.0.0 in plugin.json and the changelog; tag it.
