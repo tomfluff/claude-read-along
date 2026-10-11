@@ -635,7 +635,9 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
   const heading = line.match(/^#{1,6}\s+/)
   const quote = line.match(/^>\s?/)
   const skipped = (marker?.[0] ?? heading?.[0] ?? quote?.[0] ?? '').length
-  const prefix = marker ? `${marker[1]}${/\d/.test(marker[2] ?? '') ? marker[2] : '•'} ` : quote ? '│ ' : ''
+  // The marker as Claude Code draws it (`-` for any bullet), in a column of its
+  // own so a wrapped line hangs under the text, not under the marker.
+  const prefix = marker ? `${marker[1]}${/\d/.test(marker[2] ?? '') ? marker[2] : '-'} ` : quote ? '│ ' : ''
   const runs = inlineRuns(raw, lineStart + skipped, lineEnd, at)
   const hl = highlightProps(str('highlight', 'reverse'))
 
@@ -647,20 +649,28 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
       <Box flexDirection="column" flexGrow={1} flexShrink={1}>
         {before ? [<Markdown text={before} />] : []}
         <Box marginTop={before ? gapBefore : 0}>
-          <Text bold={heading !== null}>
-            {prefix}
-            {runs.map(r => {
-              // A web address is drawn as a link holding the highlighted text:
-              // left as plain text, the terminal made it a link of its own
-              // and dropped the background.
-              const piece = (
-                <Text {...r.style} {...(r.isRead ? hl : {})}>
-                  {r.text}
-                </Text>
-              )
-              return r.href ? <Link href={r.href}>{piece}</Link> : piece
-            })}
-          </Text>
+          {prefix
+            ? [
+                <Box flexShrink={0}>
+                  <Text>{prefix}</Text>
+                </Box>,
+              ]
+            : []}
+          <Box flexGrow={1} flexShrink={1}>
+            <Text bold={heading !== null}>
+              {runs.map(r => {
+                // A web address is drawn as a link holding the highlighted text:
+                // left as plain text, the terminal made it a link of its own
+                // and dropped the background.
+                const piece = (
+                  <Text {...r.style} {...(r.isRead ? hl : {})}>
+                    {r.text}
+                  </Text>
+                )
+                return r.href ? <Link href={r.href}>{piece}</Link> : piece
+              })}
+            </Text>
+          </Box>
         </Box>
         {after
           ? [
