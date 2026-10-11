@@ -58,12 +58,10 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
       as-is). It appears at https://sechayk.com/claude-read-along/ (the user
       site's custom domain); set it as the repository's website and link it
       from the README's top and its "Hear it" section.
-- [ ] Upload `docs/videos/short-example.mp4` and `docs/samples/video/*.mp4`
-      (drag them into a comment or the README editor on GitHub) and put the
-      user-attachments links in the README: the demo under the banner, the
-      samples in "Hear it". GitHub plays videos uploaded that way, never
-      audio or repo files. (`docs/videos/` holds the recordings cropped and
-      compressed to 1600 px; the originals are in `.drafts/videos/`.)
+- [x] Videos: the web page plays the recordings and samples with their voice;
+      the README shows `docs/videos/mouse-example.gif` (made from the
+      hover-buttons recording, 1200 px, 8 fps, 48 colours) instead of
+      uploaded videos. The originals are in `.drafts/videos/`.
 
 ## Before 1.0.0
 
