@@ -382,6 +382,9 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
 
 // ------------------------------------------------------------ drawing
 //
+// Symbols are text-only ones (‖ « » ▶ ■): ⏸ ⏮ ⏭ default to emoji and a
+// terminal may draw them as colour icons.
+//
 // A child left out is an empty list, never `cond && <X/>`: the `false` that
 // leaves behind still takes a row on the terminal.
 
@@ -408,7 +411,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
 
   const controls = (
     <Box key={`${id}-controls`} columnGap={1}>
-      <Button key={`${id}-play`} label={isPlaying ? '⏸' : '▶'} onPress={() => (isThis ? control($, 'toggle') : speak($, text, key, label, 'now'))} />
+      <Button key={`${id}-play`} label={isPlaying ? '‖' : '▶'} onPress={() => (isThis ? control($, 'toggle') : speak($, text, key, label, 'now'))} />
       <Button key={`${id}-restart`} label="⟲" onPress={() => (isThis ? control($, 'restart') : speak($, text, key, label, 'now'))} />
       {isThis ? [<Button key={`${id}-stop`} label="■" onPress={() => control($, 'stop')} />] : []}
       <Button key={`${id}-slower`} label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
@@ -445,7 +448,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
     const progress = (
       <Box columnGap={1}>
         <Text color="cyan">
-          {status.state === 'paused' ? '⏸' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+          {status.state === 'paused' ? '‖' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
         </Text>
         {controls}
       </Box>
@@ -649,16 +652,16 @@ export const register: Register = (on, options) => {
     return (
       <Box columnGap={1} flexWrap="nowrap">
         <Text color="cyan" wrap="truncate-end">
-          {isPaused ? '⏸' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+          {isPaused ? '‖' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
           <Text dimColor>
             {where}
             {queued}
           </Text>
         </Text>
-        <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '⏸'} onPress={() => control($, 'toggle')} />
+        <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '‖'} onPress={() => control($, 'toggle')} />
         <Button key="stop" hotkey="s" label="■" onPress={() => control($, 'stop')} />
-        <Button key="back" hotkey="b" label="⏮" onPress={() => control($, 'back')} />
-        <Button key="forward" hotkey="n" label="⏭" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
+        <Button key="back" hotkey="b" label="«" onPress={() => control($, 'back')} />
+        <Button key="forward" hotkey="n" label="»" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
         <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
         <Button key="faster" label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
         <Button key="voice" hotkey="v" label={voice} onPress={() => nextVoice($)} />
@@ -671,7 +674,7 @@ export const register: Register = (on, options) => {
     const status = await read($, now)
     if (status === null) return next(e)
     const s = await settings($)
-    const mark = status.state === 'paused' ? '⏸' : '♪'
+    const mark = status.state === 'paused' ? '‖' : '♪'
     const tail = `${mark} ${clock(status.position)}/${clock(status.total)} · ${status.speed ?? s.speed}× ${voiceName(status.voice ?? s.voice)}`
     return next({ ...e, props: { ...e.props, tail } })
   })
