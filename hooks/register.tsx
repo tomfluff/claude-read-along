@@ -496,6 +496,54 @@ async function drawMessage($: $, e: MessageEvent, raw: string, key: string, lead
   return next(marked ? ({ ...e, props: { ...e.props, text: marked } } as MessageEvent) : e)
 }
 
+/** The player's one row: idle settings, or the read in progress with its controls. */
+async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderElement> {
+  const { Box, Text, Button } = $.ui.resolve(e)
+  const status = await read($, now)
+  const s = await settings($)
+  const cols = e.props.bodyColumns ?? e.viewport?.columns ?? 80
+
+  if (status === null) {
+    const auto = s.autoReadReplies === 'off' && !s.autoReadMine ? 'auto-read off' : `auto-read ${[s.autoReadReplies !== 'off' ? `replies (${s.autoReadReplies})` : '', s.autoReadMine ? 'mine' : ''].filter(Boolean).join(' + ')}`
+    return (
+      <Box columnGap={1} flexWrap="nowrap">
+        <Text dimColor wrap="truncate-end">
+          ♪ {voiceName(s.voice)} · {s.speed}× · {auto}
+        </Text>
+        <Button key="last" hotkey="r" label="▶ last reply" onPress={() => readLast($)} />
+        <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read aloud' })} />
+      </Box>
+    )
+  }
+
+  const isPaused = status.state === 'paused'
+  const fraction = status.total ? (status.position ?? 0) / status.total : 0
+  const where = status.sentences ? ` ${(status.sentence ?? 0) + 1}/${status.sentences}` : ''
+  const queued = status.queue ? ` +${status.queue}` : ''
+  const voice = voiceName(status.voice ?? s.voice)
+  // Everything but the bar has a fixed width; the bar takes what is left, so the row never wraps.
+  const fixed = 2 + 5 + 1 + 5 + where.length + queued.length + 1 + 6 * 6 + (voice.length + 5) + 8
+  const width = Math.max(4, Math.min(40, cols - fixed))
+  return (
+    <Box columnGap={1} flexWrap="nowrap">
+      <Text color="cyan" wrap="truncate-end">
+        {isPaused ? '‖' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+        <Text dimColor>
+          {where}
+          {queued}
+        </Text>
+      </Text>
+      <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '‖'} onPress={() => control($, 'toggle')} />
+      <Button key="stop" hotkey="s" label="■" onPress={() => control($, 'stop')} />
+      <Button key="back" hotkey="b" label="«" onPress={() => control($, 'back')} />
+      <Button key="forward" hotkey="n" label="»" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
+      <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
+      <Button key="faster" label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
+      <Button key="voice" hotkey="v" label={voice} onPress={() => nextVoice($)} />
+    </Box>
+  )
+}
+
 export const register: Register = (on, options) => {
   opt = options as Options
 
@@ -621,50 +669,16 @@ export const register: Register = (on, options) => {
   // The player at the bottom: one row that is always there, idle or reading,
   // so it never pushes the transcript when a read starts or ends. With
   // `bottom: hint` it is a dim tail on the hint line under the prompt instead.
+  // Other mods draw here too (token-weather, blast-radius): their band stays,
+  // with the player's row under it, rather than the player hiding it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || controlsAt() === 'message' || str('bottom', 'band') !== 'band') return next(e)
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const status = await read($, now)
-    const s = await settings($)
-    const cols = e.props.bodyColumns ?? e.viewport?.columns ?? 80
-
-    if (status === null) {
-      const auto = s.autoReadReplies === 'off' && !s.autoReadMine ? 'auto-read off' : `auto-read ${[s.autoReadReplies !== 'off' ? `replies (${s.autoReadReplies})` : '', s.autoReadMine ? 'mine' : ''].filter(Boolean).join(' + ')}`
-      return (
-        <Box columnGap={1} flexWrap="nowrap">
-          <Text dimColor wrap="truncate-end">
-            ♪ {voiceName(s.voice)} · {s.speed}× · {auto}
-          </Text>
-          <Button key="last" hotkey="r" label="▶ last reply" onPress={() => readLast($)} />
-          <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read aloud' })} />
-        </Box>
-      )
-    }
-
-    const isPaused = status.state === 'paused'
-    const fraction = status.total ? (status.position ?? 0) / status.total : 0
-    const where = status.sentences ? ` ${(status.sentence ?? 0) + 1}/${status.sentences}` : ''
-    const queued = status.queue ? ` +${status.queue}` : ''
-    const voice = voiceName(status.voice ?? s.voice)
-    // Everything but the bar has a fixed width; the bar takes what is left, so the row never wraps.
-    const fixed = 2 + 5 + 1 + 5 + where.length + queued.length + 1 + 6 * 6 + (voice.length + 5) + 8
-    const width = Math.max(4, Math.min(40, cols - fixed))
+    const others = await next(e)
+    const { Box } = $.ui.resolve(e)
     return (
-      <Box columnGap={1} flexWrap="nowrap">
-        <Text color="cyan" wrap="truncate-end">
-          {isPaused ? '‖' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
-          <Text dimColor>
-            {where}
-            {queued}
-          </Text>
-        </Text>
-        <Button key="toggle" hotkey="p" label={isPaused ? '▶' : '‖'} onPress={() => control($, 'toggle')} />
-        <Button key="stop" hotkey="s" label="■" onPress={() => control($, 'stop')} />
-        <Button key="back" hotkey="b" label="«" onPress={() => control($, 'back')} />
-        <Button key="forward" hotkey="n" label="»" onPress={() => control($, status.queue ? 'skip' : 'forward')} />
-        <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
-        <Button key="faster" label="+" onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
-        <Button key="voice" hotkey="v" label={voice} onPress={() => nextVoice($)} />
+      <Box flexDirection="column">
+        {others}
+        {await playerRow($, e)}
       </Box>
     )
   })
