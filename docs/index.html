@@ -10,20 +10,22 @@
 <meta property="og:image" content="https://sechayk.com/claude-read-along/banner-light.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+JP:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+JP:wght@500&family=Noto+Sans+KR:wght@500&display=swap" rel="stylesheet">
 <style>
 /* The banner's palette: ivory and ink, terracotta for the accent, and the
    highlight pale on dark and deep on light so the text on it always reads. */
 :root {
   --bg: #F0EEE6; --ink: #141413; --muted: #5E5B55; --accent: #B5522F; --rule: #D9D6CC;
   --card: #FAF9F5; --code-bg: #1F1E1D; --code-ink: #E8E6DC;
-  --hl-bg: #8E3B22; --hl-fg: #FFF6EF; --focus: #2F6FB0;
+  --hl-bg: #FFAE84; --hl-fg: #141413; --focus: #2F6FB0;
+  --bubble: #1F1E1D; --bubble-ink: #F0EEE6;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #141413; --ink: #F0EEE6; --muted: #B4B0A6; --accent: #E08A68; --rule: #34322F;
     --card: #1F1E1D; --code-bg: #FAF9F5; --code-ink: #1F1E1D;
-    --hl-bg: #F7D4C2; --hl-fg: #141413; --focus: #9DC4E8;
+    --hl-bg: #B4330C; --hl-fg: #FFF6EF; --focus: #9DC4E8;
+    --bubble: #FAF9F5; --bubble-ink: #1F1E1D;
   }
 }
 * { box-sizing: border-box; }
@@ -38,8 +40,30 @@ body {
 a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
 a:hover { color: var(--accent); }
 
-header.hero { max-width: 1280px; margin: 0 auto; padding: 24px 16px 0; }
-header.hero img { display: block; width: 100%; height: auto; border-radius: 14px; }
+/* The banner, live: the title, and beside it the mock terminal the robot
+   lies on, which plays. Laid out as the README's banner image is. */
+header.hero {
+  max-width: 1280px; margin: 0 auto; padding: 40px 16px 8px;
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 9fr); gap: 24px 48px; align-items: center;
+}
+@media (max-width: 900px) { header.hero { grid-template-columns: minmax(0, 1fr); padding-top: 24px; } }
+.hero-text h1 { font-size: clamp(3.2rem, 7vw, 6rem); line-height: .9; letter-spacing: -.04em; margin: 16px 0 0; }
+.hero-text .kicker { margin: 0; font-size: clamp(.95rem, 1.4vw, 1.15rem); }
+.hero-text .lede { font: 500 clamp(1.15rem, 1.6vw, 1.5rem)/1.45 'JetBrains Mono', monospace; color: var(--muted); margin: 24px 0 0; }
+.hero-text .lede b { color: var(--ink); }
+.hero-demo { position: relative; container-type: inline-size; padding-top: 21%; }
+.sky { position: absolute; top: 0; left: 0; right: 0; aspect-ratio: 880 / 185; }
+.bubble {
+  position: absolute; background: var(--bubble); color: var(--bubble-ink); border-radius: 1.4cqw;
+  padding: max(3px, .7cqw) max(7px, 1.7cqw); font: 700 max(10px, 2.2cqw)/1.3 'JetBrains Mono', monospace; white-space: nowrap;
+  box-shadow: 0 1cqw 2.4cqw -1.4cqw rgba(0, 0, 0, .6);
+}
+.bubble[lang="ja"], .bubble[lang="ko"] { font-family: 'Noto Sans JP', 'Noto Sans KR', sans-serif; font-weight: 500; }
+.mascot { position: absolute; left: 63.6%; width: 29.5%; bottom: -12%; z-index: 2; pointer-events: none; }
+.hero-demo .term { position: relative; z-index: 1; margin: 0; }
+.hero br.wide { display: none; }
+@media (min-width: 901px) { .hero br.wide { display: inline; } }
+.hint { font-size: 1rem; color: var(--muted); margin: 12px 0 0; }
 main { max-width: 46rem; margin: 0 auto; padding: 8px 16px 64px; }
 h1, h2, h3 { font-family: 'JetBrains Mono', monospace; letter-spacing: -.02em; line-height: 1.2; }
 h1 { font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 800; margin: 40px 0 8px; }
@@ -82,18 +106,11 @@ table { border-collapse: collapse; width: 100%; font-size: 1.05rem; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 th { font-family: 'JetBrains Mono', monospace; font-size: .9rem; }
 .table-wrap { overflow-x: auto; }
-/* The title in text: the banner shows it on wide screens, so it's there
-   for screen readers only; on a phone the banner's text is too small. */
-@media (min-width: 720px) {
-  .title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .lede { margin-top: 32px; }
-}
-
 /* The mock terminal, flipped against the page as on the banner: dark on the
    light page, light on the dark one, with the highlight that reads on it. */
 .term {
   --t-bg: #1F1E1D; --t-edge: #34322F; --t-ink: #E8E6DC; --t-dim: #8A877E; --t-line: #2B2A27; --t-dot: #45433F;
-  --t-code: #9DC4E8; --t-hl-bg: #F7D4C2; --t-hl-fg: #141413; --t-band: #E9B872;
+  --t-code: #9DC4E8; --t-hl-bg: #FFAE84; --t-hl-fg: #141413; --t-band: #E9B872;
   margin: 18px 0 0; background: var(--t-bg); color: var(--t-ink); border: 1px solid var(--t-edge);
   border-radius: 12px; font: 400 .95rem/1.6 'JetBrains Mono', monospace; overflow: hidden;
   box-shadow: 0 30px 60px -30px rgba(20, 20, 19, .5);
@@ -101,7 +118,7 @@ th { font-family: 'JetBrains Mono', monospace; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
   .term {
     --t-bg: #FAF9F5; --t-edge: #D9D6CC; --t-ink: #1F1E1D; --t-dim: #6E6B64; --t-line: #ECE9E1; --t-dot: #CFCBC0;
-    --t-code: #2F6FB0; --t-hl-bg: #8E3B22; --t-hl-fg: #FFF6EF; --t-band: #9A5410;
+    --t-code: #2F6FB0; --t-hl-bg: #B4330C; --t-hl-fg: #FFF6EF; --t-band: #9A5410;
     box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8);
   }
 }
@@ -143,6 +160,8 @@ th { font-family: 'JetBrains Mono', monospace; font-size: .9rem; }
 .term .speed { color: var(--t-ink); background: var(--t-line); padding: 2px 7px; border-radius: 3px; }
 .term .prompt { margin: 0 -18px; padding: 10px 18px 14px; border-top: 1px solid var(--t-line); color: var(--t-dim); display: flex; gap: 8px; align-items: center; }
 .term .caret { width: 9px; height: 18px; background: var(--t-ink); display: inline-block; }
+@media (prefers-reduced-motion: no-preference) { .term .caret { animation: blink 1.1s steps(1) infinite; } }
+@keyframes blink { 50% { opacity: 0; } }
 kbd { font: 500 .85em 'JetBrains Mono', monospace; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em; }
 
 footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 1rem; }
@@ -153,60 +172,60 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
 <a class="skip" href="#main">Skip to the content</a>
 
 <header class="hero">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="banner-dark.png">
-    <img src="banner-light.png" width="2400" height="960" alt="A terminal shows one of Claude's replies with the sentence being read highlighted and a player bar under it, while a small orange robot with headphones lies on the terminal saying hello in Korean, Japanese, Spanish and English.">
-  </picture>
+  <div class="hero-text">
+    <p class="kicker">A mod for Claude Code</p>
+    <h1>Read<span class="dash">-</span><br>along</h1>
+    <p class="lede">Claude's replies, <b>read aloud</b>,<br class="wide"> with <mark>the sentence you're</mark><br class="wide"> <mark>hearing</mark> highlighted.</p>
+    <div class="cta">
+      <a class="primary" href="#install">Install</a>
+      <a href="#hear-it">More voices</a>
+      <a href="https://github.com/tomfluff/claude-read-along">GitHub</a>
+    </div>
+  </div>
+  <div class="hero-demo">
+    <div class="sky" aria-hidden="true">
+      <span class="bubble" lang="ko" style="left:17.4%;top:59%">안녕하세요</span>
+      <span class="bubble" lang="ja" style="left:32.2%;top:29%">こんにちは</span>
+      <span class="bubble" style="left:51.8%;top:16%">¡Hola!</span>
+      <span class="bubble" style="left:50%;top:61%">Hello!</span>
+      <img class="mascot" src="mascot.png" alt="">
+    </div>
+      <section class="term" aria-label="Read-along demo: a mock Claude Code terminal" tabindex="-1">
+        <div class="bar"><i></i><i></i><i></i><span>claude · ~/projects/app</span></div>
+        <div class="body">
+          <p class="you"><span aria-hidden="true">&gt; </span><b>why is the build failing?</b></p>
+          <div class="msg">
+            <div class="btns">
+              <button class="ico" data-act="toggle" aria-label="Play">PLAY</button>
+              <button class="ico" data-act="restart" aria-label="Read from the start">RESTART</button>
+              <button class="ico" data-act="slower" aria-label="Slower">SLOWER</button>
+              <button class="ico" data-act="faster" aria-label="Faster">FASTER</button>
+              <button class="voice-btn" data-act="voice" aria-label="Voice: heart. Press for the next voice">heart</button>
+            </div>
+            <p class="reply"><span data-s="0">The build fails because <code>parseVoices</code> moved, but two files still import it from the old place.</span> <span data-s="1">I pointed both imports at <b>voices.ts</b>, so the build passes again.</span> <span data-s="2">Then I ran the whole test suite, and all 42 tests pass.</span></p>
+          </div>
+          <div class="band">
+            <span class="who">SPEAKER <b class="vname">heart</b></span>
+            <span class="pos">0:00</span>
+            <span class="track" aria-hidden="true"><span class="fill"></span></span>
+            <span class="tot">0:00</span>
+            <span class="dim where">–/3</span>
+            <span class="ctl">
+              <button class="ico" data-act="toggle" aria-label="Play" data-key="p">PLAY</button>
+              <button class="ico" data-act="stop" aria-label="Stop" data-key="s">STOP</button>
+              <button class="ico" data-act="back" aria-label="Previous sentence" data-key="b">BACK</button>
+              <button class="ico" data-act="next" aria-label="Next sentence" data-key="n">FORWARD</button>
+              <span class="speed" aria-live="polite">1.25×</span>
+            </span>
+          </div>
+          <p class="prompt"><span aria-hidden="true">&gt; </span><span class="caret"></span></p>
+        </div>
+      </section>
+    <p class="hint">A live demo: press play on the reply. With it focused, <kbd>p</kbd> plays and pauses, <kbd>s</kbd> stops, <kbd>b</kbd> and <kbd>n</kbd> step between sentences.</p>
+  </div>
 </header>
 
 <main id="main">
-  <div class="title">
-  <p class="kicker">A mod for Claude Code</p>
-  <h1>Read<span class="dash">-</span>along</h1>
-  </div>
-  <p class="lede">Listen to Claude's replies in the terminal while <mark>the sentence being read</mark> is highlighted, so you can follow along with your eyes and ears together.</p>
-  <div class="cta">
-    <a class="primary" href="#install">Install</a>
-    <a href="#try">Try it</a>
-    <a href="#hear-it">More voices</a>
-    <a href="https://github.com/tomfluff/claude-read-along">Code on GitHub</a>
-  </div>
-
-  <h2 id="try">Try it</h2>
-  <p>A mock of Claude Code with read-along in it. Press play, and the sentence being read is highlighted as it goes. Change the speed or the voice while it plays.</p>
-  <section class="term" aria-label="Read-along demo: a mock Claude Code terminal" tabindex="-1">
-    <div class="bar"><i></i><i></i><i></i><span>claude · ~/projects/app</span></div>
-    <div class="body">
-      <p class="you"><span aria-hidden="true">&gt; </span><b>why is the build failing?</b></p>
-      <div class="msg">
-        <div class="btns">
-          <button class="ico" data-act="toggle" aria-label="Play">PLAY</button>
-          <button class="ico" data-act="restart" aria-label="Read from the start">RESTART</button>
-          <button class="ico" data-act="slower" aria-label="Slower">SLOWER</button>
-          <button class="ico" data-act="faster" aria-label="Faster">FASTER</button>
-          <button class="voice-btn" data-act="voice" aria-label="Voice: heart. Press for the next voice">heart</button>
-        </div>
-        <p class="reply"><span data-s="0">The build fails because <code>parseVoices</code> moved, but two files still import it from the old place.</span> <span data-s="1">I pointed both imports at <b>voices.ts</b>, so the build passes again.</span> <span data-s="2">Then I ran the whole test suite, and all 42 tests pass.</span></p>
-      </div>
-      <div class="band">
-        <span class="who">SPEAKER <b class="vname">heart</b></span>
-        <span class="pos">0:00</span>
-        <span class="track" aria-hidden="true"><span class="fill"></span></span>
-        <span class="tot">0:00</span>
-        <span class="dim where">–/3</span>
-        <span class="ctl">
-          <button class="ico" data-act="toggle" aria-label="Play" data-key="p">PLAY</button>
-          <button class="ico" data-act="stop" aria-label="Stop" data-key="s">STOP</button>
-          <button class="ico" data-act="back" aria-label="Previous sentence" data-key="b">BACK</button>
-          <button class="ico" data-act="next" aria-label="Next sentence" data-key="n">FORWARD</button>
-          <span class="speed" aria-live="polite">1.25×</span>
-        </span>
-      </div>
-      <p class="prompt"><span aria-hidden="true">&gt; </span><span class="caret"></span></p>
-    </div>
-  </section>
-  <p class="note">With the demo focused, <kbd>p</kbd> plays and pauses, <kbd>s</kbd> stops, and <kbd>b</kbd> and <kbd>n</kbd> step between sentences, as in the terminal.</p>
-
   <h2 id="who">Who it's for</h2>
   <p>Anyone who would rather hear long replies than read them: people with dyslexia, low vision, ADHD or eye strain, people reading in a second language, and anyone who wants to look away from the screen while Claude explains something. It is not a screen reader and doesn't replace one.</p>
 
