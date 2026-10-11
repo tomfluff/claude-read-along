@@ -1,6 +1,6 @@
 {
   "name": "read-aloud",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Read messages aloud with Kokoro or Windows voices: buttons on every message, the sentence marked as it's read, a progress band, per-language voices, and auto-read.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -130,6 +130,16 @@
       "options": [
         "band",
         "hint"
+      ]
+    },
+    "icons": {
+      "type": "string",
+      "title": "Icons",
+      "description": "nerd: Nerd Font speaker/pause icons in the player (WezTerm draws them from JetBrainsMono Nerd Font); text: plain symbols for terminals without a Nerd Font.",
+      "default": "nerd",
+      "options": [
+        "nerd",
+        "text"
       ]
     },
     "python": {

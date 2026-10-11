@@ -16,6 +16,17 @@ const cursor = atom({ plugin: 'read-aloud', key: 'cursor' } as const, null)
 const PANE = 'read-aloud'
 const SPEED_STEP = 0.25
 const VOLUME_STEP = 10
+/**
+ * The player's status icon, by state. `nerd` uses Nerd Font icons (speaker,
+ * pause, hourglass), as WezTerm draws them from JetBrainsMono Nerd Font;
+ * `text` uses plain symbols for a terminal without one.
+ */
+const ICONS = {
+  nerd: { idle: '\u{F057E}', playing: '\u{F057E}', paused: '\u{F03E4}', loading: '\u{F051F}' },
+  text: { idle: '♫', playing: '♫', paused: '‖', loading: '…' },
+} as const
+const icon = (state: 'idle' | 'playing' | 'paused' | 'loading') => ICONS[str('icons', 'nerd') === 'text' ? 'text' : 'nerd'][state]
+const stateOf = (status: ReadAloudStatus) => (status.state === 'paused' ? 'paused' : status.state === 'loading' ? 'loading' : 'playing')
 const DUCK_LEVELS = ['off', '50%', '30%', '15%']
 /** Other apps' volume while reading, as a fraction of their own: `30%` → 0.3, `off` → 1. */
 const duckLevel = (duckOthers: string) => (duckOthers === 'off' ? 1 : Math.max(0, Math.min(1, parseFloat(duckOthers) / 100 || 1)))
@@ -448,7 +459,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
     const progress = (
       <Box columnGap={1}>
         <Text color="cyan">
-          {status.state === 'paused' ? '‖' : status.state === 'loading' ? '…' : '♪'} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+          {icon(stateOf(status))} {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
         </Text>
         {controls}
       </Box>
@@ -509,8 +520,16 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
     const auto = s.autoReadReplies === 'off' && !s.autoReadMine ? 'auto-read off' : `auto-read ${[s.autoReadReplies !== 'off' ? `replies (${s.autoReadReplies})` : '', s.autoReadMine ? 'mine' : ''].filter(Boolean).join(' + ')}`
     return (
       <Box columnGap={1} flexWrap="nowrap" paddingX={1}>
-        <Text dimColor wrap="truncate-end">
-          ♪{'  '}{voiceName(s.voice)} · {s.speed}× · {auto}
+        <Text wrap="truncate-end">
+          <Text color="magenta" bold>
+            {icon('idle')}
+            {'  '}
+            {voiceName(s.voice)}
+          </Text>
+          <Text dimColor>
+            {'  '}
+            {s.speed}× · {auto}
+          </Text>
         </Text>
         <Button key="last" hotkey="r" label="▶ last reply" onPress={() => readLast($)} />
         <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read aloud' })} />
@@ -529,7 +548,9 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
   return (
     <Box columnGap={1} flexWrap="nowrap" paddingX={1}>
       <Text color="cyan" wrap="truncate-end">
-        {isPaused ? '‖' : status.state === 'loading' ? '…' : '♪'}{'  '}{clock(status.position)} {bar(fraction, width)} {clock(status.total)}
+        <Text bold>{icon(stateOf(status))}</Text>
+        {'  '}
+        {clock(status.position)} {bar(fraction, width)} {clock(status.total)}
         <Text dimColor>
           {where}
           {queued}
@@ -690,7 +711,7 @@ export const register: Register = (on, options) => {
     const status = await read($, now)
     if (status === null) return next(e)
     const s = await settings($)
-    const mark = status.state === 'paused' ? '‖' : '♪'
+    const mark = icon(stateOf(status))
     const tail = `${mark} ${clock(status.position)}/${clock(status.total)} · ${status.speed ?? s.speed}× ${voiceName(status.voice ?? s.voice)}`
     return next({ ...e, props: { ...e.props, tail } })
   })
