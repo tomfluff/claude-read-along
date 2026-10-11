@@ -128,6 +128,56 @@ const saw = (e: { surface: RenderSurface; component: string }) => {
 /** The bottom player's form: a band above the prompt, a tail on the hint line, or none. */
 const bottomKind = () => (playerAt() === 'message' ? 'none' : playerAt() === 'hint' ? 'hint' : 'band')
 
+/**
+ * Whether another mod hides the player band. The band is one tree the mods
+ * draw in turn, in \`enabledPlugins\` order, and a mod listed before
+ * read-along that draws its own band without passing it on keeps read-along's
+ * hook from running at all, so read-along can't see it from inside the hook.
+ * Instead, after the session starts and after each turn, the clock asks for a
+ * redraw and watches which of read-along's hooks run: the hint line under the
+ * prompt without the band means the band is taken. The player then shows on
+ * the hint line meanwhile, and a toast says so, once a session.
+ */
+const band = {
+  /** undefined until checked; then whether the last check found the band taken. */
+  isHidden: undefined as boolean | undefined,
+  /** The clock tick to check at (0: none due) and the one the check began at. */
+  dueTick: 0,
+  startTick: 0,
+  sawBand: false,
+  sawHint: false,
+  isToasted: false,
+}
+const checkBandSoon = () => {
+  band.dueTick = ticks + 8 // about 3 s on, so the other mods have drawn
+}
+const hidesBand = () => bottomKind() === 'band' && band.isHidden === true
+
+/** One step of the check, from the clock. */
+function checkBand($: $) {
+  if (band.startTick === 0) {
+    if (!band.dueTick || ticks < band.dueTick || bottomKind() !== 'band') return
+    band.dueTick = 0
+    band.startTick = ticks
+    band.sawBand = band.sawHint = false
+    $.ui.invalidate('ui.render')
+    return
+  }
+  if (ticks - band.startTick < 4) return // about 1.5 s for the redraw
+  band.startTick = 0
+  if (!band.sawHint) return // no prompt drawn in the terminal: nothing to tell
+  const isHidden = !band.sawBand
+  if (isHidden !== band.isHidden) $.ui.invalidate('ui.render') // the hint line takes the player, or gives it back
+  band.isHidden = isHidden
+  if (isHidden && !band.isToasted) {
+    band.isToasted = true
+    $.ui.toast(
+      'Read-along: another mod hides the player above the prompt, so it shows under the prompt for now. Move read-along up in enabledPlugins (~/.claude/settings.json) to get it back; /read-along doctor says more.',
+      { timeoutMs: 12000 },
+    )
+  }
+}
+
 let socketPath = ''
 let isEnsured = false
 let lastError: string | null | undefined
@@ -234,6 +284,7 @@ function poll() {
 
 async function tick($: $) {
   ticks += 1
+  checkBand($)
   if (!isActive && ticks % 8 !== 0) return
   try {
     const res = await $.http.fetch('http://speakd/status', { socketPath: await sock($) })
@@ -358,6 +409,15 @@ async function surfacesReport($: $) {
     lines.push(`  ${surface}: ${asks.length ? asks.join(', ') : 'has asked for nothing yet'}`)
   }
   if (attached.size) lines.push(`  remote clients: ${[...attached].join(', ')}`)
+  if (bottomKind() === 'band') {
+    lines.push(
+      band.isHidden === undefined
+        ? 'Player above the prompt: not checked yet (it is checked after each turn).'
+        : band.isHidden
+          ? 'Player above the prompt: hidden by another mod, so it shows on the line under the prompt. A mod listed before read-along in enabledPlugins (~/.claude/settings.json) draws there without passing the band on; move read-along above it, or set player to hint.'
+          : 'Player above the prompt: shown.',
+    )
+  }
   return lines.join('\n')
 }
 
@@ -743,6 +803,7 @@ export const register: Register = (on, options) => {
     })
     ticker?.cancel()
     ticker = $.clock.every(400, () => tick($))
+    checkBandSoon()
     // Start the service and load the voices now, so the first read starts at once.
     void (async () => {
       try {
@@ -766,6 +827,7 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    if (e.agentId === undefined) checkBandSoon() // a turn can bring another mod's band (replay-theater's after edits)
     if (e.agentId === undefined && e.reason === 'answer' && (await settings($)).autoReadReplies === 'final') {
       await speak($, e.answer, messageKey('a', e.answer), 'reply', 'queue')
     }
@@ -904,6 +966,7 @@ export const register: Register = (on, options) => {
   // should drawing the player fail, the .catch below hands theirs on alone.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     saw(e)
+    if (e.surface === 'terminal') band.sawBand = true
     if (e.props.hasSurvey || bottomKind() !== 'band') return next(e)
     const others = await next(e)
     const { Box, Text } = $.ui.resolve(e)
@@ -922,7 +985,9 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     saw(e)
-    if (bottomKind() !== 'hint') return next(e)
+    if (e.surface === 'terminal') band.sawHint = true
+    // The hint line also carries the player while another mod hides the band.
+    if (bottomKind() !== 'hint' && !hidesBand()) return next(e)
     const status = await read($, now)
     if (status === null) return next(e)
     const s = await settings($)

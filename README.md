@@ -183,6 +183,15 @@ checked against a pinned SHA-256.
   `/read-along restart`.
 - **Crackling on WSL?** The service already uses a 300 ms audio buffer there,
   which WSLg needs. Check that nothing else is holding the audio device.
+- **No player above the prompt?** The band above the prompt is shared: mods
+  draw it in turn, in the order of `enabledPlugins` in
+  `~/.claude/settings.json`, and a mod that draws its own line there without
+  passing the band on hides the mods after it. Read-along notices this, says
+  so once, and shows the player on the line under the prompt meanwhile;
+  `/read-along doctor` reports it too. To get the band back, move
+  `"read-along@claude-read-along": true` above that mod in `enabledPlugins`
+  and run `/reload-plugins`, or set `player` to `hint` to keep it under the
+  prompt.
 - **No buttons in the desktop or mobile app (Remote Control)?** Run
   `/read-along doctor` in the terminal. Under "Surfaces" it lists each app
   following the session and what it has asked read-along to draw; an app

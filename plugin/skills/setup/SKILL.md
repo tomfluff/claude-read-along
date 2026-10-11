@@ -71,6 +71,13 @@ they run the command themselves (`! <command>` at the prompt).
 2. Ask them to press the play button on a message, or run `/read-along read`.
 3. If it's silent, look at the service log, `/tmp/read-along-$(id -u).log`
    (it says which voice failed and why).
+4. After the next reply, ask them to run `/read-along doctor` in the session
+   and read its last line, "Player above the prompt". If it says hidden,
+   another mod listed before read-along in `enabledPlugins`
+   (`~/.claude/settings.json`) draws the band without passing it on. Explain
+   that, and offer two fixes: move the `"read-along@claude-read-along": true`
+   line above that mod (only with their okay, changing nothing else in the
+   file, then `/reload-plugins`), or set `player` to `hint` in `/read-along`.
 
 ## 4. Choosing voices
 

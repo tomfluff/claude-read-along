@@ -8,6 +8,10 @@ The first version prepared for release, renamed from read-aloud.
   hovering, and a read's progress shows under its message, as the phone has no
   player band. `/read-along doctor` lists the surfaces following the session
   and what each has asked read-along to draw.
+- When another mod hides the player above the prompt (one listed before
+  read-along in `enabledPlugins` that draws there without passing the band
+  on), read-along says so once, shows the player on the line under the
+  prompt meanwhile, and `/read-along doctor` reports it.
 - Auto-read (`all`) reads each of Claude's updates as soon as its text is
   written, rather than once the step's tool call has streamed in, which for a
   long command or file came a minute late and never for a step cut short.
