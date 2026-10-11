@@ -1,6 +1,6 @@
 {
   "name": "read-aloud",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Read messages aloud with Kokoro or Windows voices: buttons on every message, the sentence marked as it's read, a progress band, per-language voices, and auto-read.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -102,10 +102,11 @@
     "buttons": {
       "type": "string",
       "title": "Message buttons",
-      "description": "hover shows a message's buttons while the pointer is on the ♪ at its right; always shows them under every message; off hides them.",
+      "description": "hover shows a message's buttons at its top-right while the pointer is anywhere on it (they can flash as messages scroll under a resting pointer); glyph shows them only while the pointer is on the ♪ at its right; always shows them under every message; off hides them.",
       "default": "hover",
       "options": [
         "hover",
+        "glyph",
         "always",
         "off"
       ]

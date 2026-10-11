@@ -395,7 +395,7 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
  * transcript otherwise lit each message that scrolled under it as a message
  * was sent, so buttons flashed up and away.
  */
-type MessageExtras = { below: RenderElement | null; gutter: RenderElement | null }
+type MessageExtras = { below: RenderElement | null; gutter: RenderElement | null; overlay: RenderElement | null }
 
 async function messageRow($: $, e: MessageEvent, text: string, key: string, label: string): Promise<MessageExtras> {
   const { Box, Text, Button } = $.ui.resolve(e)
@@ -418,8 +418,17 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
     </Box>
   )
 
-  const gutter =
+  // `hover`: the buttons over the message's top-right corner while the pointer
+  // is anywhere on the message. They can flash as messages scroll under a
+  // resting pointer; `glyph` avoids that by hovering a ♪ alone.
+  const overlay =
     buttons() === 'hover' ? (
+      <Box position="absolute" top={0} right={0} display="none" hover={{ display: 'flex' }} backgroundColor="black">
+        {controls}
+      </Box>
+    ) : null
+  const gutter =
+    buttons() === 'glyph' ? (
       <Box key={`ra-${id}-gutter`} width={2} flexShrink={0}>
         <Text color={isThis ? 'cyan' : undefined} dimColor={!isThis}>
           {' ♪'}
@@ -441,14 +450,24 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
         {controls}
       </Box>
     )
-    return { below: progress, gutter }
+    return { below: progress, gutter, overlay }
   }
-  return { below: buttons() === 'always' ? controls : null, gutter }
+  return { below: buttons() === 'always' ? controls : null, gutter, overlay }
 }
 
-function wrap($: $, e: MessageEvent, inner: RenderElement, { below, gutter }: MessageExtras): RenderElement {
-  if (below === null && gutter === null) return inner
+function wrap($: $, e: MessageEvent, inner: RenderElement, { below, gutter, overlay }: MessageExtras): RenderElement {
+  if (below === null && gutter === null && overlay === null) return inner
   const { Box } = $.ui.resolve(e)
+  if (overlay !== null) {
+    // Keyed, so the whole message is the hover's scope.
+    return (
+      <Box key={`ra-${e.requestId}`} flexDirection="column">
+        {inner}
+        {below ? [below] : []}
+        {overlay}
+      </Box>
+    )
+  }
   return (
     <Box flexDirection="row">
       <Box flexDirection="column" flexGrow={1} flexShrink={1}>
