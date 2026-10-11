@@ -49,22 +49,26 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
   out with `cond ? [<X/>] : []`, never `cond && <X/>`; write `$.state` only
   when the value changed (each write redraws its readers).
 
-## Before making the repository public (v1)
+## Release 0.9.0 (public preview)
+
+- [x] A short recording of a reply being read with the highlight (`docs/videos/`).
+- [x] README, changelog and the web page say only WSL has been tried by hand.
+- [ ] Make the repository public; tag `v0.9.0` and publish a GitHub release.
+- [ ] GitHub Pages from `main`, folder `/docs` (`docs/.nojekyll` keeps it
+      as-is). It appears at https://sechayk.com/claude-read-along/ (the user
+      site's custom domain); set it as the repository's website and link it
+      from the README's top and its "Hear it" section.
+- [ ] Upload `docs/videos/short-example.mp4` and `docs/samples/video/*.mp4`
+      (drag them into a comment or the README editor on GitHub) and put the
+      user-attachments links in the README: the demo under the banner, the
+      samples in "Hear it". GitHub plays videos uploaded that way, never
+      audio or repo files. (`docs/videos/` holds the recordings cropped and
+      compressed to 1600 px; the originals are in `.drafts/videos/`.)
+
+## Before 1.0.0
 
 - [ ] Test on macOS (issue #1) and on Linux desktops (issue #2).
+- [ ] Native Windows (#5), which would bring the buttons to the desktop app.
 - [ ] Lowering other apps beyond WSL: Linux through pactl (#3), macOS partial
-      at best (#4). Not needed for v1.
-- [x] A short recording of a reply being read with the highlight (`docs/videos/`).
-- [ ] Once public: upload `docs/samples/video/*.mp4` (`gh issue comment … --attach`,
-      or drag them into GitHub's editor) and put the user-attachments links
-      in the README's "Hear it" table, so the samples play on the page.
-      GitHub plays videos uploaded that way, never audio or repo files.
-- [ ] The web page (`docs/index.html`, with `docs/demo/` made by
-      `tools/make_demo.py`): turn on GitHub Pages from `main`, folder `/docs`.
-      It appears at https://sechayk.com/claude-read-along/; link it from the
-      README's top and its "Hear it" section.
-- [ ] Once public: upload `docs/videos/short-example.mp4` the same way and put
-      its user-attachments link at the top of the README, under the banner.
-      (`docs/videos/` holds the demo recordings, cropped and compressed to
-      1600 px; the originals are in `.drafts/videos/`, outside git.)
+      at best (#4). Not needed for 1.0.
 - [ ] Version 1.0.0 in plugin.json and the changelog; tag it.

@@ -55,7 +55,12 @@ opens a short MP3.
   that version. They also draw in the JetBrains plugin and the desktop app's
   Code tab, but not in the desktop app's WSL sessions.
 - **WSL, Linux or macOS.** Native Windows isn't supported yet; use it through
-  WSL.
+  WSL ([#5](https://github.com/tomfluff/claude-read-along/issues/5)). So far
+  read-along has been used day to day on WSL only. On Linux and macOS its tests,
+  the doctor and a spoken sentence pass in CI, but nobody has tried it there by
+  hand yet: reports are welcome in
+  [#2](https://github.com/tomfluff/claude-read-along/issues/2) (Linux) and
+  [#1](https://github.com/tomfluff/claude-read-along/issues/1) (macOS).
 - **Python 3.9 or newer** as `python3`. The speech service needs only the
   standard library.
 - **An audio player:** `ffplay` (comes with ffmpeg) or SoX's `play`.

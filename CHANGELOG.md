@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.9.0 (unreleased)
+## 0.9.0 (2026-10-11)
 
-The first version prepared for release, renamed from read-aloud.
+The first public version, renamed from read-aloud: a preview. Used day to day
+on WSL; on Linux and macOS it passes CI but hasn't been tried by hand yet.
 
 - Remote Control: on the Claude mobile app the message buttons show without
   hovering, and a read's progress shows under its message, as the phone has no
