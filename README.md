@@ -1,5 +1,10 @@
 # Read-along for Claude Code
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.png">
+  <img src="docs/banner-light.png" width="100%" alt="Read-along, a mod for Claude Code: Claude's replies, read aloud, with the sentence you're hearing highlighted. A terminal shows a reply with one sentence highlighted and a player bar under it, while a small orange robot with headphones lies on the terminal saying hello in Korean, Japanese, Spanish and English.">
+</picture>
+
 [![Tests: passing or failing, on Linux and macOS](https://github.com/tomfluff/claude-read-along/actions/workflows/tests.yml/badge.svg)](https://github.com/tomfluff/claude-read-along/actions/workflows/tests.yml)
 ![Needs Claude Code 2.1.287 or later](https://img.shields.io/badge/Claude_Code-2.1.287%2B-D97757)
 ![Runs on WSL, Linux and macOS](https://img.shields.io/badge/runs_on-WSL_%C2%B7_Linux_%C2%B7_macOS-4C7A9E)
