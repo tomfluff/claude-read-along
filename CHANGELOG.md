@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.9.1 (2026-10-11)
+
+The highlight follows more of a reply: formatted lines, web addresses, list
+items and tables.
 
 - The line being read keeps its bold, italics, struck-through text and links
   (underlined) under the highlight, in the highlight's one colour; it used to
