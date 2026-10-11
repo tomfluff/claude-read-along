@@ -6,8 +6,9 @@
 ![Voices run locally; nothing is sent anywhere](https://img.shields.io/badge/voices-local_%26_private-2E7D32)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
-Listen to Claude's replies while the sentence being read is highlighted in
-the terminal, so you can follow along with your eyes and ears together.
+A mod for Claude Code: listen to Claude's replies while the sentence being
+read is highlighted in the terminal, so you can follow along with your eyes
+and ears together.
 
 Read-along is for anyone who would rather hear long replies than read them:
 people with dyslexia, low vision, ADHD or eye strain, people reading in a
@@ -82,14 +83,14 @@ Next, check what your machine has:
 ```
 
 To get the Kokoro voices, run `/read-along setup`. It puts a request in the
-prompt box; press Enter and Claude walks you through it with the plugin's
+prompt box; press Enter and Claude walks you through it with the mod's
 setup skill, asking before it installs anything. To do it yourself instead,
 run `python3 <plugin folder>/bin/setup.py kokoro` (add `--japanese` for
 Japanese). Kokoro goes into its own folder,
 `~/.local/share/claude-read-along` (on macOS,
 `~/Library/Application Support/claude-read-along`), and nowhere else.
 
-To see what the plugin hooks and calls before you install it, clone the
+To see what the mod hooks and calls before you install it, clone the
 repository and run `claude plugin validate .` in it.
 
 ## Using it
@@ -162,7 +163,7 @@ If your Latin-script text isn't English, tell `auto` which language it is:
 
 ## Privacy
 
-The plugin runs a small speech service on your machine. It is reached over a
+The mod runs a small speech service on your machine. It is reached over a
 Unix socket that only your user can open, and it sends nothing over the
 network. The network is used only by setup: Python packages come from PyPI,
 and Kokoro's model comes from the
@@ -177,6 +178,12 @@ checked against a pinned SHA-256.
   `/read-along restart`.
 - **Crackling on WSL?** The service already uses a 300 ms audio buffer there,
   which WSLg needs. Check that nothing else is holding the audio device.
+- **No buttons in the desktop or mobile app (Remote Control)?** Run
+  `/read-along doctor` in the terminal. Under "Surfaces" it lists each app
+  following the session and what it has asked read-along to draw; an app
+  that has asked for nothing doesn't draw mods yet. On the phone the buttons
+  show all the time, as there is no pointer to hover with. The voice always
+  plays on the computer running the session.
 - **The first read is slow.** Kokoro loads its model on the first read of a
   session (a few seconds), then keeps it until the service has been idle for
   30 minutes.

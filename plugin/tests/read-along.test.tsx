@@ -14,6 +14,17 @@ test('a reply carries play, speed and voice buttons on every surface', async ($,
   }
 })
 
+test('on the phone the buttons show without a pointer to hover with', async ($, on) => {
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
+  const hidden = async (surface: 'terminal' | 'mobile', id: string) => {
+    const ui = await $.ui.mount({ plugin: 'read-along', surface, component: 'AssistantMessage', props: REPLY, requestId: id })
+    expect(await ui.find({ key: `${id}-play` })).toBeDefined()
+    return JSON.stringify(await ui.drawn()).includes('"display":"none"')
+  }
+  expect(await hidden('terminal', 'm5')).toBe(true)
+  expect(await hidden('mobile', 'm6')).toBe(false)
+})
+
 test('the voice button names the chosen main voice', { options: { voices: 'main=kokoro:af_heart, win:Microsoft Aria Native; ja=kokoro:jf_alpha' } }, async ($, on) => {
   on('ui.render', () => ({ type: 'engine', ref: 0 }))
   const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'AssistantMessage', props: REPLY, requestId: 'm4' })

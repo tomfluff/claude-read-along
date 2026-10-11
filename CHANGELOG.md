@@ -4,12 +4,17 @@
 
 The first version prepared for release, renamed from read-aloud.
 
+- Remote Control: on the Claude mobile app the message buttons show without
+  hovering, and a read's progress shows under its message, as the phone has no
+  player band. `/read-along doctor` lists the surfaces following the session
+  and what each has asked read-along to draw.
+
 - Voices from several engines: Kokoro, the macOS voices, the Windows voices
   (from WSL) and eSpeak NG. A voice is written `engine:name`, and `auto` picks
   the best one installed for each language.
-- Kokoro can be installed by the plugin itself (`bin/setup.py kokoro`, or ask
+- Kokoro can be installed by the mod itself (`bin/setup.py kokoro`, or ask
   Claude with `/read-along setup`): kokoro-onnx on the CPU, about 1 GB, into
-  the plugin's own data folder. An existing Kokoro can be used instead.
+  the mod's own data folder. An existing Kokoro can be used instead.
 - `/read-along doctor` says what works on the machine and what to install;
   `/read-along voices` lists the installed voices; `/read-along restart`.
 - Plays through ffplay or SoX, so it runs on macOS and Linux as well as WSL.

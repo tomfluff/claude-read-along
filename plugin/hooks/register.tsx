@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderElement, RenderInput } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, RenderInput, RenderSurface } from 'claude-code'
 
 import type { ReadAlongCursor, ReadAlongInfo, ReadAlongSettings, ReadAlongStatus, ReadAlongVoice } from '../types'
 
@@ -103,11 +103,28 @@ const defaults = (): ReadAlongSettings => ({
   autoReadReplies: str('autoReadReplies', 'off'),
   autoReadMine: bool('autoReadMine', false),
 })
-const buttons = () => str('buttons', 'hover')
+/** The message buttons' form on a surface. The phone has no pointer to hover with, so it shows them. */
+const buttons = (surface: RenderSurface = 'terminal') => {
+  const chosen = str('buttons', 'hover')
+  return surface === 'mobile' && (chosen === 'hover' || chosen === 'glyph') ? 'always' : chosen
+}
 /** `player`: band | hint | message | band+message. */
 const playerAt = () => str('player', 'band')
-/** Whether a read's progress shows under its message. */
-const showsUnderMessage = () => playerAt() === 'message' || playerAt() === 'band+message'
+/** Whether a read's progress shows under its message. The phone draws no band, so there it always does. */
+const showsUnderMessage = (surface: RenderSurface = 'terminal') =>
+  surface === 'mobile' || playerAt() === 'message' || playerAt() === 'band+message'
+
+/**
+ * What each surface has asked this mod to draw since it loaded, and the remote
+ * clients that attached: \`/read-along doctor\` shows them, so a surface that
+ * shows no buttons can be told apart from one that never asks.
+ */
+const drawn: Record<string, Record<string, number>> = {}
+const attached = new Set<string>()
+const saw = (e: { surface: RenderSurface; component: string }) => {
+  const bySurface = (drawn[e.surface] ??= {})
+  bySurface[e.component] = (bySurface[e.component] ?? 0) + 1
+}
 /** The bottom player's form: a band above the prompt, a tail on the hint line, or none. */
 const bottomKind = () => (playerAt() === 'message' ? 'none' : playerAt() === 'hint' ? 'hint' : 'band')
 
@@ -329,7 +346,19 @@ async function saveDefaults($: $) {
 /** /read-along doctor: what works on this machine and what to install. */
 async function doctor($: $) {
   const run = await $.process.run(['python3', '-I', speakd($), '--doctor', '--socket', await sock($)], { timeoutMs: 60000 })
-  return (run.stdout || run.stderr || 'The doctor printed nothing.').trim()
+  return [(run.stdout || run.stderr || 'The doctor printed nothing.').trim(), '', await surfacesReport($)].join('\n')
+}
+
+/** Where this session draws, and what each surface has asked read-along to draw. */
+async function surfacesReport($: $) {
+  const surfaces = await $.session.surfaces()
+  const lines = ['Surfaces (where this session is drawn):']
+  for (const surface of new Set([...surfaces, ...Object.keys(drawn)])) {
+    const asks = Object.entries(drawn[surface] ?? {}).map(([component, n]) => `${component} ${n}`)
+    lines.push(`  ${surface}: ${asks.length ? asks.join(', ') : 'has asked for nothing yet'}`)
+  }
+  if (attached.size) lines.push(`  remote clients: ${[...attached].join(', ')}`)
+  return lines.join('\n')
 }
 
 async function restart($: $) {
@@ -522,6 +551,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
   const isThis = at !== null && at.key === key
   const status = isThis ? await read($, now) : null // only the message being read follows the clock
   const isPlaying = status !== null && (status.state === 'playing' || status.state === 'loading')
+  const form = buttons(e.surface)
 
   const controls = (
     <Box key={`${id}-controls`} columnGap={1}>
@@ -539,13 +569,13 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
   // is anywhere on the message. They can flash as messages scroll under a
   // resting pointer; `glyph` avoids that by hovering a ♪ alone.
   const overlay =
-    buttons() === 'hover' ? (
+    form === 'hover' ? (
       <Box position="absolute" top={0} right={0} display="none" hover={{ display: 'flex' }} backgroundColor="black">
         {controls}
       </Box>
     ) : null
   const gutter =
-    buttons() === 'glyph' ? (
+    form === 'glyph' ? (
       <Box key={`ra-${id}-gutter`} width={2} flexShrink={0}>
         <Text color={isThis ? 'cyan' : undefined} dimColor={!isThis}>
           {' ♪'}
@@ -556,7 +586,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
       </Box>
     ) : null
 
-  if (status !== null && showsUnderMessage()) {
+  if (status !== null && showsUnderMessage(e.surface)) {
     const width = Math.max(8, Math.min(24, (e.viewport?.columns ?? 80) - 60))
     const fraction = status.total ? (status.position ?? 0) / status.total : 0
     const progress = (
@@ -569,7 +599,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
     )
     return { below: progress, gutter, overlay }
   }
-  return { below: buttons() === 'always' ? controls : null, gutter, overlay }
+  return { below: form === 'always' ? controls : null, gutter, overlay }
 }
 
 function wrap($: $, e: MessageEvent, inner: RenderElement, { below, gutter, overlay }: MessageExtras): RenderElement {
@@ -826,7 +856,13 @@ export const register: Register = (on, options) => {
 
   // ------------------------------------------------------------ drawing
 
+  on('session.attach', async ($, e, next) => {
+    attached.add(`${e.clientId} (${e.surface})`)
+    return next(e)
+  })
+
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
+    saw(e)
     if (e.props.isSummary || !e.props.text.trim()) return next(e)
     const key = messageKey('a', e.props.text)
     const inner = await drawMessage($, e, e.props.text, key, e.props.isFirstOfReply ? '● ' : '  ', ev => next(ev as typeof e))
@@ -834,6 +870,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
+    saw(e)
     const kind = e.props.origin.kind
     if ((kind !== 'composer' && kind !== 'bridge') || !e.props.text.trim()) return next(e)
     const key = messageKey('u', e.props.text)
@@ -847,6 +884,7 @@ export const register: Register = (on, options) => {
   // Other mods draw here too: their band stays, under the player's row,
   // rather than the player hiding it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    saw(e)
     if (e.props.hasSurvey || bottomKind() !== 'band') return next(e)
     const others = await next(e)
     const { Box, Text } = $.ui.resolve(e)
@@ -864,6 +902,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    saw(e)
     if (bottomKind() !== 'hint') return next(e)
     const status = await read($, now)
     if (status === null) return next(e)
@@ -875,6 +914,7 @@ export const register: Register = (on, options) => {
 
   // /read-along with no arguments: the settings, one place for all of them.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    saw(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const s = await settings($)
     const status = await read($, now)
