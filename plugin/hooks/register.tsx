@@ -882,7 +882,9 @@ export const register: Register = (on, options) => {
   // so it never pushes the transcript when a read starts or ends. With
   // `player: hint` it is a dim tail on the hint line under the prompt instead.
   // Other mods draw here too: their band stays, under the player's row,
-  // rather than the player hiding it.
+  // rather than the player hiding it. The band is one tree that each mod in
+  // turn either passes on or wraps, so the player wraps theirs to sit on top;
+  // should drawing the player fail, the .catch below hands theirs on alone.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     saw(e)
     if (e.props.hasSurvey || bottomKind() !== 'band') return next(e)
@@ -899,7 +901,7 @@ export const register: Register = (on, options) => {
         {others}
       </Box>
     )
-  })
+  }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     saw(e)
