@@ -8,6 +8,9 @@ The first version prepared for release, renamed from read-aloud.
   hovering, and a read's progress shows under its message, as the phone has no
   player band. `/read-along doctor` lists the surfaces following the session
   and what each has asked read-along to draw.
+- Auto-read (`all`) reads each of Claude's updates as soon as its text is
+  written, rather than once the step's tool call has streamed in, which for a
+  long command or file came a minute late and never for a step cut short.
 
 - Voices from several engines: Kokoro, the macOS voices, the Windows voices
   (from WSL) and eSpeak NG. A voice is written `engine:name`, and `auto` picks

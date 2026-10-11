@@ -772,15 +772,32 @@ export const register: Register = (on, options) => {
     return done
   })
 
-  // `all`: read each model step's visible text as the step ends, the short
-  // updates written just before a tool call included. Those never reach the
-  // transcript as their own rows, so listening to session.append missed them.
+  // `all`: read each text block of a model step as soon as the block ends,
+  // the short updates written just before a tool call included. Waiting for
+  // the whole step read an update only once its tool call had streamed in,
+  // which for a long command or file came a minute late, and never for a
+  // step cut short. (Those updates never reach the transcript as their own
+  // rows, so listening to session.append missed them.)
   on('turn.step', async function* ($, e, next) {
-    const step = yield* next(e)
-    if (e.agentId === undefined && step.answer.trim() && (await settings($)).autoReadReplies === 'all') {
-      await speak($, step.answer, messageKey('a', step.answer), 'reply', 'queue')
+    if (e.agentId !== undefined || (await settings($)).autoReadReplies !== 'all') return yield* next(e)
+    let block: number | undefined
+    let text = ''
+    const flush = async () => {
+      if (text.trim()) await speak($, text, messageKey('a', text), 'reply', 'queue')
+      block = undefined
+      text = ''
     }
-    return step
+    for await (const chunk of next(e)) {
+      if (chunk.kind === 'text') {
+        if (block !== undefined && chunk.index !== block) await flush()
+        block = chunk.index
+        text += chunk.text
+      } else if (chunk.kind === 'tool' || chunk.kind === 'stop') {
+        await flush()
+      }
+      yield chunk
+    }
+    await flush()
   })
 
   on('command.run', { command: 'read-along' }, async ($, e) => {

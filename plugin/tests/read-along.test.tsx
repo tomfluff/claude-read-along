@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 import { formatVoices, highlightProps, parseVoices, voiceName } from '../hooks/register'
 
@@ -105,4 +105,34 @@ test('the highlight is reverse video unless a colour is given', async () => {
   expect(highlightProps('')).toEqual({ inverse: true })
   expect(highlightProps('yellow')).toEqual({ backgroundColor: 'yellow' })
   expect(highlightProps('#7d1010/#ffffff')).toEqual({ backgroundColor: '#7d1010', color: '#ffffff' })
+})
+
+test('auto-read reads a step\'s text when its block ends, before the tool call has streamed', { options: { autoReadReplies: 'all' } }, async ($, on) => {
+  const spoken: string[] = []
+  const toasts: string[] = []
+  let toolStreamed = false
+  on('ui.toast', async ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  mock.env(on, { USER: 'tester' })
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', async ($, e) => {
+    if (e.url.endsWith('/speak')) spoken.push(`${JSON.parse(String(e.init?.body)).text}${toolStreamed ? ' (late)' : ''}`)
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ state: 'idle', queue: 0 }) } }
+  })
+  on('turn.step', async function* () {
+    yield { kind: 'text', index: 0, text: 'Checking the logs ' }
+    yield { kind: 'text', index: 0, text: 'first.' }
+    yield { kind: 'tool', index: 1, id: 't1', name: 'Bash' }
+    toolStreamed = true
+    yield { kind: 'input', index: 1, json: '{"command":"ls"}' }
+    yield { kind: 'stop', stopReason: 'tool_use', usage: null }
+    return { turnId: 'turn', index: 0, answer: 'Checking the logs first.', toolUses: [], stopReason: 'tool_use', usage: null }
+  })
+  for await (const _ of $.turn.step({ turnId: 'turn', index: 0, model: 'm', messageCount: 1 })) {
+    // drain the stream as the engine does
+  }
+  expect(toasts).toEqual([])
+  expect(spoken).toEqual(['Checking the logs first.'])
 })
