@@ -504,10 +504,25 @@ const findSentence = (raw: string, sentence: string) => {
   return { start, end }
 }
 
-/** Fallback where the message can't be redrawn (a table, a code block): the sentence bold. */
-const markSentence = (raw: string, sentence: string) => {
+/**
+ * Fallback where the message can't be redrawn (a table, a code block): the
+ * sentence bold. A table is Claude Code's own drawing, which takes no
+ * background, so the row being read gets its cells in bold instead.
+ */
+export const markSentence = (raw: string, sentence: string) => {
   const at = findSentence(raw, sentence)
   if (!at) return undefined
+  const lineStart = raw.lastIndexOf('\n', at.start - 1) + 1
+  const lineEnd = raw.indexOf('\n', at.start) < 0 ? raw.length : raw.indexOf('\n', at.start)
+  const line = raw.slice(lineStart, lineEnd)
+  if (/^\s*\|/.test(line)) {
+    if (/^\s*\|?[\s:|-]+$/.test(line)) return undefined // the separator row
+    const row = line.replace(/(\|)([^|]*?)(?=\|)/g, (cell, bar: string, body: string) => {
+      const text = body.trim()
+      return text && !/^\*\*.*\*\*$/.test(text) ? `${bar}${body.replace(text, `**${text}**`)}` : cell
+    })
+    return `${raw.slice(0, lineStart)}${row}${raw.slice(lineEnd)}`
+  }
   const span = raw.slice(at.start, at.end)
   if (/[\n`*_[\]|]/.test(span)) return undefined
   return `${raw.slice(0, at.start)}**${span}**${raw.slice(at.end)}`
@@ -521,14 +536,15 @@ const markSentence = (raw: string, sentence: string) => {
  * heard. One colour on purpose: the highlight's.
  */
 export type InlineStyle = { bold?: true; italic?: true; strikethrough?: true; underline?: true }
-export type InlineRun = { text: string; style: InlineStyle; isRead: boolean }
+/** `href`: a bare web address, drawn as an explicit link (see drawRead). */
+export type InlineRun = { text: string; style: InlineStyle; isRead: boolean; href?: string }
 
 export function inlineRuns(raw: string, from: number, to: number, read: { start: number; end: number }): InlineRun[] {
-  const cells: { ch: string; at: number; style: InlineStyle }[] = []
-  const put = (text: string, at: number, style: InlineStyle) => {
+  const cells: { ch: string; at: number; style: InlineStyle; href?: string }[] = []
+  const put = (text: string, at: number, style: InlineStyle, href?: string) => {
     let k = 0
     for (const ch of text) {
-      cells.push({ ch, at: at + k, style })
+      cells.push({ ch, at: at + k, style, ...(href ? { href } : {}) })
       k += ch.length // positions count UTF-16 units, as the sentence's do
     }
   }
@@ -548,7 +564,10 @@ export function inlineRuns(raw: string, from: number, to: number, read: { start:
         walk(m[1] ?? '', base + i + 1, { ...style, underline: true })
         i += m[0].length
       } else if ((m = rest.match(/^<(https?:\/\/[^>\s]+)>/))) {
-        put(m[1] ?? '', base + i + 1, { ...style, underline: true })
+        put(m[1] ?? '', base + i + 1, style, m[1])
+        i += m[0].length
+      } else if (!/[\p{L}\p{N}]/u.test(src[i - 1] ?? '') && (m = rest.match(/^https?:\/\/[^\s<>]*[^\s<>.,;:!?'")\]]/u))) {
+        put(m[0], base + i, style, m[0])
         i += m[0].length
       } else if ((m = rest.match(/^(\*\*|__)(?=\S)([\s\S]*?\S)\1/))) {
         walk(m[2] ?? '', base + i + 2, { ...style, bold: true })
@@ -570,11 +589,11 @@ export function inlineRuns(raw: string, from: number, to: number, read: { start:
   }
   walk(raw.slice(from, to), from, {})
   const runs: InlineRun[] = []
-  for (const { ch, at, style } of cells) {
+  for (const { ch, at, style, href } of cells) {
     const isRead = at >= read.start && at < read.end
     const last = runs[runs.length - 1]
-    if (last && last.isRead === isRead && JSON.stringify(last.style) === JSON.stringify(style)) last.text += ch
-    else runs.push({ text: ch, style, isRead })
+    if (last && last.isRead === isRead && last.href === href && JSON.stringify(last.style) === JSON.stringify(style)) last.text += ch
+    else runs.push({ text: ch, style, isRead, ...(href ? { href } : {}) })
   }
   return runs
 }
@@ -605,7 +624,7 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
   const fences = (raw.slice(0, lineStart).match(/^\s*```/gm) ?? []).length
   if (/^\s*\|/.test(line) || fences % 2 === 1) return undefined
 
-  const { Box, Text, Markdown } = $.ui.resolve(e)
+  const { Box, Text, Markdown, Link } = $.ui.resolve(e)
   const before = raw.slice(0, lineStart).replace(/\s+$/, '')
   const after = raw.slice(lineEnd).replace(/^\s+/, '')
   const gapBefore = /\n\s*\n\s*$/.test(raw.slice(0, lineStart)) ? 1 : 0
@@ -630,11 +649,17 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
         <Box marginTop={before ? gapBefore : 0}>
           <Text bold={heading !== null}>
             {prefix}
-            {runs.map(r => (
-              <Text {...r.style} {...(r.isRead ? hl : {})}>
-                {r.text}
-              </Text>
-            ))}
+            {runs.map(r => {
+              // A web address is drawn as a link holding the highlighted text:
+              // left as plain text, the terminal made it a link of its own
+              // and dropped the background.
+              const piece = (
+                <Text {...r.style} {...(r.isRead ? hl : {})}>
+                  {r.text}
+                </Text>
+              )
+              return r.href ? <Link href={r.href}>{piece}</Link> : piece
+            })}
           </Text>
         </Box>
         {after

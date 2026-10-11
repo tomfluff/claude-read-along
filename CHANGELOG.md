@@ -16,6 +16,9 @@ on WSL; on Linux and macOS it passes CI but hasn't been tried by hand yet.
 - The line being read keeps its bold, italics, struck-through text and links
   (underlined) under the highlight, in the highlight's one colour; it used to
   turn plain while highlighted.
+- A web address in the line being read keeps the highlight's background, and
+  a table row being read shows its cells in bold (Claude Code draws tables
+  itself, so they take no background); table rows had no highlight before.
 - "Read thinking updates" (off by default; `/read-along auto thinking on`):
   with auto-read `all`, also read Claude's thinking, for setups that show it
   as updates in the transcript, where a step can show only thinking before its

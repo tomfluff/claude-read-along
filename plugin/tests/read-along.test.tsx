@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { formatVoices, highlightProps, inlineRuns, parseVoices, voiceName } from '../hooks/register'
+import { formatVoices, highlightProps, inlineRuns, markSentence, parseVoices, voiceName } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -243,4 +243,20 @@ test('the line being read keeps bold, italics, links and strikethrough, in one c
   const emoji = '🎉 Done. Then more.'
   const after = inlineRuns(emoji, 0, emoji.length, { start: emoji.indexOf('Then'), end: emoji.length })
   expect(after.filter(r => r.isRead).map(r => r.text).join('')).toBe('Then more.')
+})
+
+test('a bare web address becomes its own link run, without trailing punctuation', async () => {
+  const raw = 'See https://sechayk.com/claude-read-along/. Then <https://x.y/z> too.'
+  const runs = inlineRuns(raw, 0, raw.length, { start: 0, end: raw.length })
+  expect(runs.filter(r => r.href).map(r => [r.text, r.href])).toEqual([
+    ['https://sechayk.com/claude-read-along/', 'https://sechayk.com/claude-read-along/'],
+    ['https://x.y/z', 'https://x.y/z'],
+  ])
+  expect(runs.map(r => r.text).join('')).toBe('See https://sechayk.com/claude-read-along/. Then https://x.y/z too.')
+})
+
+test('a table row being read gets its cells in bold', async () => {
+  const raw = 'Voices:\n\n| Voice | Language |\n|---|---|\n| heart | English |\n| alpha | Japanese |'
+  expect(markSentence(raw, 'heart, English.')).toBe('Voices:\n\n| Voice | Language |\n|---|---|\n| **heart** | **English** |\n| alpha | Japanese |')
+  expect(markSentence(raw, 'Voice, Language.')).toContain('| **Voice** | **Language** |')
 })
