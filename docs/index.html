@@ -204,6 +204,11 @@ th { font-family: 'JetBrains Mono', monospace; font-size: .9rem; }
 @keyframes blink { 50% { opacity: 0; } }
 kbd { font: 500 .85em 'JetBrains Mono', monospace; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3em; }
 
+.clip { margin: 16px 0 0; }
+.clip video { display: block; width: 100%; height: auto; aspect-ratio: 1600 / 738; border-radius: 10px; border: 1px solid var(--rule); background: #1F1E1D; }
+.clip figcaption { font-size: 1rem; color: var(--muted); margin-top: 6px; }
+.clips { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0 16px; }
+
 footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 1rem; }
 @media (prefers-reduced-motion: no-preference) { .sample p { transition: background-color .2s; } }
 </style>
@@ -274,6 +279,23 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
 </header>
 
 <main id="main">
+  <h2 id="see-it">See it in Claude Code</h2>
+  <p>Recorded in a real session. The voice reads the highlighted sentence on screen.</p>
+  <figure class="clip main-clip">
+    <video controls preload="none" playsinline poster="videos/short-example.jpg" src="videos/short-example.mp4" aria-label="Read-along reading two replies in Claude Code, each sentence highlighted as it is heard"></video>
+  </figure>
+  <div class="clips">
+    <figure class="clip">
+      <video controls preload="none" playsinline poster="videos/mouse-example.jpg" src="videos/mouse-example.mp4" aria-label="Hovering a message for its play, speed and voice buttons"></video>
+      <figcaption>Hover a message for its buttons.</figcaption>
+    </figure>
+    <figure class="clip">
+      <video controls preload="none" playsinline poster="videos/settings-example.jpg" src="videos/settings-example.mp4" aria-label="The settings pane: voices per language, speed, volume and auto-read"></video>
+      <figcaption>The settings: <code>/read-along</code>.</figcaption>
+    </figure>
+  </div>
+  <p class="note">The <a href="videos/full-example.mp4">whole walkthrough</a> runs 1 minute 25.</p>
+
   <h2 id="who">Who it's for</h2>
   <p>Anyone who would rather hear long replies than read them: people with dyslexia, low vision, ADHD or eye strain, people reading in a second language, and anyone who wants to look away from the screen while Claude explains something. It is not a screen reader and doesn't replace one.</p>
 
@@ -409,7 +431,7 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
   let frame = 0;
   const loop = () => { draw(); if (!audio.paused) frame = requestAnimationFrame(loop); };
   audio.addEventListener('play', () => {
-    for (const other of document.querySelectorAll('.sample audio')) other.pause() // one voice at a time
+    for (const other of document.querySelectorAll('.sample audio, .clip video')) other.pause() // one voice at a time
     cancelAnimationFrame(frame); loop();
   });
   window.demoAudio = audio;
@@ -457,6 +479,11 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
   })
 </script>
 <script>
+  // A recorded clip playing pauses every other voice on the page.
+  for (const video of document.querySelectorAll('.clip video')) video.addEventListener('play', () => {
+    window.demoAudio?.pause()
+    for (const other of document.querySelectorAll('.sample audio, .clip video')) if (other !== video) other.pause()
+  })
   // Highlight a sample's sentence while it plays, and play one sample at a time.
   const players = [...document.querySelectorAll('.sample audio')]
   for (const audio of players) {
@@ -464,6 +491,7 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
     audio.addEventListener('play', () => {
       for (const other of players) if (other !== audio) other.pause()
       window.demoAudio?.pause()
+      for (const v of document.querySelectorAll('.clip video')) v.pause()
       line.classList.add('hl')
     })
     for (const end of ['pause', 'ended']) audio.addEventListener(end, () => line.classList.remove('hl'))

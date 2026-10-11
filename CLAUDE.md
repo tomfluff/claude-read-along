@@ -54,7 +54,7 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
 - [ ] Test on macOS (issue #1) and on Linux desktops (issue #2).
 - [ ] Lowering other apps beyond WSL: Linux through pactl (#3), macOS partial
       at best (#4). Not needed for v1.
-- [ ] A short animation of a reply being read with the highlight, for the README (voice samples and the diagram are in).
+- [x] A short recording of a reply being read with the highlight (`docs/videos/`).
 - [ ] Once public: upload `docs/samples/video/*.mp4` (`gh issue comment … --attach`,
       or drag them into GitHub's editor) and put the user-attachments links
       in the README's "Hear it" table, so the samples play on the page.
@@ -63,4 +63,8 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
       `tools/make_demo.py`): turn on GitHub Pages from `main`, folder `/docs`.
       It appears at https://sechayk.com/claude-read-along/; link it from the
       README's top and its "Hear it" section.
+- [ ] Once public: upload `docs/videos/short-example.mp4` the same way and put
+      its user-attachments link at the top of the README, under the banner.
+      (`docs/videos/` holds the demo recordings, cropped and compressed to
+      1600 px; the originals are in `.drafts/videos/`, outside git.)
 - [ ] Version 1.0.0 in plugin.json and the changelog; tag it.
