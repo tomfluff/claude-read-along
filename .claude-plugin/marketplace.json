@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "read-along",
-      "source": "./",
+      "source": "./plugin",
       "description": "Listen to Claude Code's replies while the sentence being read is highlighted. Local voices, several languages."
     }
   ]

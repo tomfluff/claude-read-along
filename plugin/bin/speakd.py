@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
-"""speakd: the read-along mod's local speech service.
+"""speakd: read-along's local speech service.
 
-One process per user, shared by every Claude Code session, so only one
-voice talks at a time. It listens for HTTP on a Unix socket, synthesizes
-with Kokoro (GPU when available) or the Windows SAPI voices, and plays
-through WSLg's PulseAudio with SoX.
+One process per user, shared by every Claude Code session, so only one voice
+talks at a time. It listens for HTTP on a Unix socket, makes speech with the
+engines in engines.py (Kokoro, the Windows or macOS voices, eSpeak NG) and
+plays it with ffplay or SoX.
 
-Speech is always synthesized at 1x and sped up while playing (ffmpeg's
-`atempo`): in testing that kept every word intelligible at 2.5x, where
-Kokoro's own `speed` both blurred words and fell short of the asked-for rate.
+Speech is always made at 1x and sped up while playing (ffmpeg's `atempo`,
+SoX's `tempo`): in testing that kept every word clear at 2.5x, where Kokoro's
+own `speed` both blurred words and fell short of the asked-for rate.
 
     speakd.py --ensure     start the service if it isn't running, then exit
     speakd.py --serve      run in the foreground
     speakd.py --stop       ask a running service to exit
+    speakd.py --doctor     say what works on this machine and what to install
+
+Only the standard library is needed. The service runs in the Python that
+bin/setup.py made for Kokoro when there is one, else in the Python that
+started it.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -32,27 +37,21 @@ import unicodedata
 from http.server import BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn, UnixStreamServer
 
-RATE = 24000
-VERSION = str(os.stat(__file__).st_mtime_ns)  # --ensure replaces a service started from an older copy
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)  # run with -I, which leaves the script's folder off the path
+
+from engines import GROUP_LANGS, PLATFORM, RATE, Engines, data_dir, log, main_language, read_config, run_powershell, script_of  # noqa: E402
+
+# --ensure replaces a service started from an older copy of these files.
+VERSION = str(max(os.stat(os.path.join(HERE, f)).st_mtime_ns for f in ("speakd.py", "engines.py")))
 DEFAULT_SOCKET = f"/tmp/read-along-{os.getuid()}.sock"
 SEC_PER_CHAR_1X = 0.068  # first guess, refined from real synthesis
 LEAD_IN = 0.3  # seconds of silence opening each run
 DUCK_RELEASE = 0.8  # seconds after a read stops before other apps come back up
-LATENCY = 0.3  # PulseAudio buffer; smaller crackles on the WSLg bridge
+# The audio buffer. WSLg's PulseAudio bridge crackles below about 300 ms.
+LATENCY = 0.3 if PLATFORM == "wsl" else 0.15
 PREBUFFER = 1.5  # seconds of speech (as heard) ready before playback starts
-
-KOKORO_VOICES = [
-    "af_heart", "af_bella", "af_nicole", "af_aoede", "af_kore", "af_sarah", "af_nova", "af_sky",
-    "af_alloy", "af_jessica", "af_river",
-    "am_fenrir", "am_michael", "am_puck", "am_echo", "am_eric", "am_liam", "am_onyx", "am_adam",
-    "bf_emma", "bf_isabella", "bf_alice", "bf_lily",
-    "bm_george", "bm_fable", "bm_lewis", "bm_daniel",
-    "jf_alpha", "jf_gongitsune", "jf_nezumi", "jf_tebukuro", "jm_kumo",
-]
-
-
-def log(*parts):
-    print(time.strftime("%H:%M:%S"), *parts, file=sys.stderr, flush=True)
+GAP = b"\0\0" * int(RATE * 0.12)  # breath between sentences
 
 
 # ---------------------------------------------------------------- text prep
@@ -113,151 +112,64 @@ def split_sentences(text: str) -> list[str]:
     return parts
 
 
-def script_of(s: str) -> str:
-    ja = sum(1 for ch in s if "぀" <= ch <= "ヿ" or "一" <= ch <= "鿿")
-    he = sum(1 for ch in s if "֐" <= ch <= "׿")
-    letters = sum(1 for ch in s if ch.isalpha()) or 1
-    if he / letters > 0.3:
-        return "he"
-    if ja / letters > 0.2:
-        return "ja"
-    return "en"
+# ---------------------------------------------------------------- playing
+
+_ffplay_major = None
 
 
-# ---------------------------------------------------------------- engines
-
-class Kokoro:
-    def __init__(self):
-        self.pipes = {}
-        self.lock = threading.Lock()
-        self.load_lock = threading.Lock()
-        self.error = None
-
-    def _pipe(self, lang):
-        with self.load_lock:  # warming and a first read must not both load it
-            return self._load(lang)
-
-    def _load(self, lang):
-        if lang not in self.pipes:
-            if lang == "j":
-                # The unidic package here ships without its dictionary; the
-                # bundled unidic-lite one serves Japanese G2P (cutlet/fugashi).
-                import unidic_lite
-
-                sys.modules.setdefault("unidic", unidic_lite)
-                if not hasattr(sys.modules["unidic"], "DICDIR"):
-                    sys.modules["unidic"] = unidic_lite
-            import torch
-            from kokoro import KPipeline
-
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            t = time.time()
-            # Share one model across languages: only the G2P differs.
-            model = next(iter(self.pipes.values())).model if self.pipes else True
-            self.pipes[lang] = KPipeline(lang_code=lang, repo_id="hexgrad/Kokoro-82M", model=model, device=device)
-            log(f"kokoro pipeline '{lang}' on {device} in {time.time() - t:.1f}s")
-        return self.pipes[lang]
-
-    def synth(self, text, voice):
-        import numpy as np
-
-        lang = voice[0] if voice[:1] in "abjefhipz" else "a"  # Kokoro voices start with their language
-        with self.lock:
-            pipe = self._pipe(lang)
-            chunks = [r.audio.numpy() for r in pipe(text, voice=voice, speed=1.0) if r.audio is not None]
-        return np.concatenate(chunks) if chunks else np.zeros(0, dtype="float32")
-
-
-WIN_WORKER = r"""
-$ErrorActionPreference = 'Stop'
-[Console]::InputEncoding = [Text.Encoding]::UTF8
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-Add-Type -AssemblyName System.Speech
-$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
-$fmt = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(24000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
-$tmp = [IO.Path]::GetTempPath()
-[Console]::Out.WriteLine('READY ' + $tmp); [Console]::Out.Flush()
-while (($line = [Console]::In.ReadLine()) -ne $null) {
-  try {
-    $req = $line | ConvertFrom-Json
-    if ($req.op -eq 'voices') {
-      $v = $s.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo.Name + '|' + $_.VoiceInfo.Culture }
-      [Console]::Out.WriteLine('VOICES ' + ($v -join ';')); [Console]::Out.Flush(); continue
-    }
-    if ($req.voice) { $s.SelectVoice($req.voice) }
-    $out = Join-Path $tmp $req.file
-    $fs = [IO.File]::Create($out)
-    try {
-      $s.SetOutputToAudioStream($fs, $fmt)
-      $s.Speak([string]$req.text)
-      $s.SetOutputToNull()
-    } finally { $fs.Close() }
-    [Console]::Out.WriteLine('OK ' + $out)
-  } catch {
-    [Console]::Out.WriteLine('ERR ' + ($_.Exception.Message -replace '\s+', ' '))
-  }
-  [Console]::Out.Flush()
-}
-"""
-
-POWERSHELL = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-
-
-class Windows:
-    """A long-lived PowerShell worker around System.Speech (the SAPI voices
-    Balabolka also uses), writing raw 24 kHz PCM to the Windows temp dir."""
-
-    def __init__(self):
-        self.proc = None
-        self.tmp = None
-        self.lock = threading.Lock()
-        self.n = 0
-
-    def _start(self):
-        if self.proc and self.proc.poll() is None:
-            return
-        enc = base64.b64encode(WIN_WORKER.encode("utf-16-le")).decode()
-        self.proc = subprocess.Popen(
-            [POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", enc],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, encoding="utf-8", bufsize=1,
-        )
-        first = self.proc.stdout.readline().strip()
-        if not first.startswith("READY "):
-            raise RuntimeError(f"Windows speech worker didn't start: {first!r}")
-        self.tmp = first[6:]
-
-    def _ask(self, req):
-        self._start()
-        self.proc.stdin.write(json.dumps(req, ensure_ascii=False) + "\n")
-        self.proc.stdin.flush()
-        return self.proc.stdout.readline().strip()
-
-    def voices(self):
-        with self.lock:
-            line = self._ask({"op": "voices"})
-        if not line.startswith("VOICES "):
-            return []
-        return [dict(zip(("name", "culture"), v.split("|"))) for v in line[7:].split(";") if v]
-
-    def synth(self, text, voice):
-        import numpy as np
-
-        with self.lock:
-            self.n += 1
-            name = f"read-along-{os.getpid()}-{self.n % 8}.pcm"
-            line = self._ask({"text": text, "voice": voice or "", "file": name})
-        if not line.startswith("OK "):
-            raise RuntimeError(line[4:] or "Windows speech failed")
-        win_path = line[3:]
-        path = subprocess.run(["wslpath", "-u", win_path], capture_output=True, text=True).stdout.strip()
-        data = np.fromfile(path, dtype="<i2").astype("float32") / 32768.0
+def ffplay_major() -> int:
+    global _ffplay_major
+    if _ffplay_major is None:
         try:
-            os.unlink(path)
+            out = subprocess.run(["ffplay", "-version"], capture_output=True, text=True).stdout
+            m = re.search(r"version n?(\d+)", out)
+            _ffplay_major = int(m.group(1)) if m else 0
         except OSError:
-            pass
-        return data
+            _ffplay_major = 0
+    return _ffplay_major
 
+
+def find_player() -> str | None:
+    """ffplay where there is one (it comes with ffmpeg), else SoX's `play`."""
+    if shutil.which("ffplay"):
+        return "ffplay"
+    if shutil.which("play"):
+        return "sox"
+    return None
+
+
+def player_command(kind: str, speed: float, volume: float) -> list[str]:
+    """A player reading 16-bit mono PCM at RATE from stdin, sped up without
+    changing pitch, at `volume` (1 = as made)."""
+    if kind == "ffplay":
+        # -ch_layout arrived in FFmpeg 5.1; older ones (Ubuntu 22.04 has 4.4) take -ac.
+        layout = ["-ch_layout", "mono"] if ffplay_major() >= 6 else ["-ac", "1"]
+        cmd = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
+               "-f", "s16le", "-ar", str(RATE), *layout, "-i", "pipe:0"]
+        filters = []
+        if abs(speed - 1.0) > 0.01:
+            filters.append(f"atempo={speed:.3f}")
+        if abs(volume - 1.0) > 0.01:
+            filters.append(f"volume={volume:.2f}")
+        return cmd + (["-af", ",".join(filters)] if filters else [])
+    cmd = ["play", "-q", "-t", "raw", "-r", str(RATE), "-e", "signed-integer", "-b", "16", "-c", "1", "-L", "-"]
+    if abs(speed - 1.0) > 0.01:
+        cmd += ["tempo", "-s", f"{speed:.3f}"]
+    if abs(volume - 1.0) > 0.01:
+        cmd += ["vol", f"{volume:.2f}"]
+    return cmd
+
+
+def player_env() -> dict:
+    env = dict(os.environ)
+    if PLATFORM == "wsl":
+        env.setdefault("PULSE_SERVER", "unix:/mnt/wslg/PulseServer")
+        env["PULSE_LATENCY_MSEC"] = str(int(LATENCY * 1000))
+        env["SDL_AUDIODRIVER"] = "pulseaudio"
+    return env
+
+
+# ---------------------------------------------------------------- volume of other apps
 
 class Ducker:
     """Lowers other Windows apps (Spotify, a browser) while a read plays, through
@@ -267,7 +179,7 @@ class Ducker:
     every few seconds while playing it lowers any app that started meanwhile.
     WSLg's own audio (msrdc, which carries this service's speech) is left alone.
     duck.ps1 restores everything when its stdin closes, so a crash here never
-    leaves apps quiet."""
+    leaves apps quiet. WSL only for now."""
 
     KEEP = ["msrdc"]
 
@@ -281,13 +193,8 @@ class Ducker:
 
     def _ask(self, req):
         if not self.proc or self.proc.poll() is not None:
-            src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "duck.ps1"), encoding="utf-8").read()
-            enc = base64.b64encode(src.encode("utf-16-le")).decode()
-            self.proc = subprocess.Popen(
-                [POWERSHELL, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", enc],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                text=True, encoding="utf-8", bufsize=1,
-            )
+            with open(os.path.join(HERE, "duck.ps1"), encoding="utf-8") as f:
+                self.proc = run_powershell(f.read())
             if self.proc.stdout.readline().strip() != "READY":
                 raise RuntimeError("the Windows volume helper didn't start")
         self.proc.stdin.write(json.dumps(req) + "\n")
@@ -337,24 +244,23 @@ class Job:
         self.id = req.get("id") or f"job-{time.time():.0f}"
         self.label = req.get("label") or ""
         self.key = req.get("key") or ""  # the mod's handle on the source message
-        # One voice per language, each a Kokoro name (af_heart, jf_alpha) or
-        # `win:<Windows voice name>` (win:Microsoft Nanami Native).
-        self.voice = req.get("voice") or "af_heart"
-        self.ja_voice = req.get("jaVoice") or "win:Microsoft Nanami Native"
-        self.he_voice = req.get("heVoice") or "win:Microsoft Hila Native"
+        # A voice per group of languages (main, ja, he, …), each `<engine>:<voice>` or `auto`.
+        self.voices = dict(req.get("voices") or {})
+        for old, group in (("voice", "main"), ("jaVoice", "ja"), ("heVoice", "he")):  # requests from before groups
+            if req.get(old) and group not in self.voices:
+                self.voices[group] = req[old]
         self.speed = float(req.get("speed") or 1.0)
         self.volume = float(req.get("volume") if req.get("volume") is not None else 1.0)
         self.duck = float(req.get("duck") if req.get("duck") is not None else 1.0)  # other apps' level; 1 = off
         self.sentences = split_sentences(speakable(req.get("text") or "", bool(req.get("readCode"))))
         self.durations: dict[int, float] = {}  # 1x seconds per sentence, once synthesized
-        self.cache: dict[tuple, object] = {}
+        self.cache: dict[tuple, bytes] = {}
 
 
 class Player:
     def __init__(self):
-        self.kokoro = Kokoro()
-        self.windows = Windows()
-        self.ducker = Ducker(self)
+        self.engines = Engines()
+        self.ducker = Ducker(self) if PLATFORM == "wsl" else None
         self.lock = threading.RLock()
         self.job: Job | None = None
         self.queue: list[Job] = []
@@ -371,30 +277,28 @@ class Player:
     # -- synthesis routing
 
     def voice_for(self, job, sentence):
-        script = script_of(sentence)
-        voice = {"he": job.he_voice, "ja": job.ja_voice}.get(script, job.voice)
-        if voice.startswith("win:"):
-            return ("windows", voice[4:])
-        if " " in voice:  # a bare Windows voice name
-            return ("windows", voice)
-        return ("kokoro", voice)
+        """(group, voice) for a sentence: its script picks the group, the group its voice."""
+        group = script_of(sentence, job.voices)
+        return group, self.engines.resolve(job.voices.get(group), group)
 
     def synth(self, job, i):
         sentence = job.sentences[i]
-        engine, voice = self.voice_for(job, sentence)
-        key = (i, engine, voice)
+        group, voice = self.voice_for(job, sentence)
+        key = (i, voice)
         if key not in job.cache:
+            if not voice:
+                raise RuntimeError("no voice installed for this language; see /read-along doctor")
             try:
-                audio = (self.kokoro if engine == "kokoro" else self.windows).synth(sentence, voice)
-            except Exception as err:  # fall back to Windows once, then give up on the sentence
-                if engine == "kokoro":
-                    log("kokoro failed, using Windows voice:", err)
-                    self.error = f"Kokoro failed ({err}); using the Windows voice."
-                    audio = self.windows.synth(sentence, "")
-                else:
+                audio = self.engines.synth(voice, sentence)
+            except Exception as err:  # once with the best other voice, then give up on the sentence
+                fallback = self.engines.auto(group)
+                if not fallback or fallback == voice:
                     raise
+                log(f"{voice} failed, using {fallback}:", err)
+                self.error = f"{voice} failed ({err}); using {fallback}."
+                audio = self.engines.synth(fallback, sentence)
             job.cache[key] = audio
-            seconds = len(audio) / RATE
+            seconds = len(audio) / 2 / RATE
             job.durations[i] = seconds
             if len(sentence) > 20:
                 self.sec_per_char = 0.8 * self.sec_per_char + 0.2 * (seconds / len(sentence))
@@ -403,9 +307,7 @@ class Player:
     # -- runs: one player process fed sentences from `start` on
     #
     # A producer thread synthesizes ahead into a queue while the run thread
-    # feeds the player, so a slow sentence (a Windows voice) never starves it.
-    # Playback is ffplay over WSLg's PulseAudio with a 300 ms buffer: the
-    # default buffer crackles on the RDP audio bridge, 300 ms plays clean.
+    # feeds the player, so a slow sentence never starves it.
 
     def _kill_player(self):
         if self.player and self.player.poll() is None:
@@ -429,30 +331,16 @@ class Player:
     def _run(self, job, start, token):
         import queue
 
-        import numpy as np
-
         speed = job.speed
-        cmd = ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet",
-               "-f", "f32le", "-ar", str(RATE), "-ch_layout", "mono", "-i", "pipe:0"]
-        filters = []
-        if abs(speed - 1.0) > 0.01:
-            filters.append(f"atempo={speed:.3f}")
-        if abs(job.volume - 1.0) > 0.01:
-            filters.append(f"volume={job.volume:.2f}")
-        if filters:
-            cmd += ["-af", ",".join(filters)]
-        env = dict(os.environ)
-        env.setdefault("PULSE_SERVER", "unix:/mnt/wslg/PulseServer")
-        env["PULSE_LATENCY_MSEC"] = str(int(LATENCY * 1000))
-        env["SDL_AUDIODRIVER"] = "pulseaudio"
-
+        kind = find_player()
         ready: queue.Queue = queue.Queue()
-        threading.Thread(target=self._produce, args=(job, start, token, ready), daemon=True).start()
-        pad = np.zeros(int(RATE * 0.12), dtype="float32")  # breath between sentences
         pending, buffered, done = [], 0.0, False
         written = 0.0
         player = None
         try:
+            if kind is None:
+                raise RuntimeError("no audio player found: install ffmpeg (ffplay) or SoX (play)")
+            threading.Thread(target=self._produce, args=(job, start, token, ready), daemon=True).start()
             while True:
                 item = ready.get()
                 if token != self.run_token:
@@ -463,8 +351,8 @@ class Player:
                     done = True
                 else:
                     i, audio = item
-                    pending.append((i, np.concatenate([audio.astype("float32"), pad])))
-                    buffered += len(pending[-1][1]) / RATE
+                    pending.append((i, audio + GAP))
+                    buffered += len(pending[-1][1]) / 2 / RATE
                 # Prebuffer: start once PREBUFFER seconds (as heard) are ready, or all of it.
                 if player is None and not done and buffered / speed < PREBUFFER:
                     continue
@@ -472,15 +360,16 @@ class Player:
                     if token != self.run_token:
                         return
                     if player is None:
-                        player = self.player = subprocess.Popen(cmd, stdin=subprocess.PIPE, env=env,
-                                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        player.stdin.write(np.zeros(int(RATE * LEAD_IN), dtype="float32").tobytes())
+                        player = self.player = subprocess.Popen(
+                            player_command(kind, speed, job.volume), stdin=subprocess.PIPE, env=player_env(),
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        player.stdin.write(b"\0\0" * int(RATE * LEAD_IN))
                         self.run_started = time.time() + LATENCY + LEAD_IN / speed
                         self.state = "playing"
                     for i, buf in pending:
                         self.run_offsets.append((written, i))
-                        written += len(buf) / RATE
-                chunk = b"".join(buf.tobytes() for _, buf in pending)
+                        written += len(buf) / 2 / RATE
+                chunk = b"".join(buf for _, buf in pending)
                 pending = []
                 try:
                     player.stdin.write(chunk)
@@ -599,7 +488,7 @@ class Player:
         return self.status()
 
     def set(self, req):
-        """Change speed, voice or engine; a running read continues from the
+        """Change speed, volume or voices; a running read continues from the
         sentence being heard, in the new settings."""
         with self.lock:
             jobs = ([self.job] if self.job else []) + self.queue
@@ -610,10 +499,9 @@ class Player:
                     job.volume = max(0.0, min(2.0, float(req["volume"])))
                 if "duck" in req:  # applied live by the ducker, no restart
                     job.duck = max(0.0, min(1.0, float(req["duck"])))
-                for k, attr in (("voice", "voice"), ("jaVoice", "ja_voice"), ("heVoice", "he_voice")):
-                    if req.get(k) is not None:
-                        setattr(job, attr, req[k])
-            if self.job and self.state in ("playing", "loading") and ({"speed", "volume", "voice", "jaVoice", "heVoice"} & req.keys()):
+                if isinstance(req.get("voices"), dict):
+                    job.voices.update(req["voices"])
+            if self.job and self.state in ("playing", "loading") and ({"speed", "volume", "voices"} & req.keys()):
                 i, _ = self._position_locked()
                 self._start_locked(self.job, i)
         return self.status()
@@ -642,6 +530,78 @@ class Player:
                 "queue": len(self.queue),
                 "error": self.error,
             }
+
+    def info(self):
+        """What this machine offers, so the mod can hide what can't work here."""
+        return {
+            "platform": PLATFORM,
+            "engines": [{"name": n, "label": e.label, "ok": e.available()[0]} for n, e in self.engines.by_name.items()],
+            "player": find_player(),
+            "canDuck": self.ducker is not None,
+            "auto": self.engines.auto("main"),
+            "mainLanguage": main_language(),
+            "groupLangs": GROUP_LANGS,
+        }
+
+    def close(self):
+        self.control({"action": "stop"})
+        if self.ducker:
+            self.ducker.close()
+        self.engines.close()
+
+
+# ---------------------------------------------------------------- the doctor
+
+INSTALL = {
+    "player": {"wsl": "sudo apt install ffmpeg", "linux": "install ffmpeg or sox from your distribution",
+               "macos": "brew install sox  (or: brew install ffmpeg)"},
+    "espeak": {"wsl": "sudo apt install espeak-ng", "linux": "install espeak-ng from your distribution"},
+}
+
+
+def doctor() -> str:
+    """A plain report of what works here, and the command for what doesn't."""
+    lines = [f"read-along on {PLATFORM}, Python {sys.version.split()[0]} ({sys.executable})",
+             f"Data folder: {data_dir()}"]
+    player = find_player()
+    lines.append(f"Player: {player}" if player else f"Player: none found. Fix: {INSTALL['player'].get(PLATFORM, 'install ffmpeg or sox')}")
+    engines = Engines()
+    lines.append("Engines:")
+    for name, e in engines.by_name.items():
+        ok, why = e.available()
+        if not ok and why.startswith("only"):
+            continue  # another platform's engine
+        if ok:
+            try:
+                voices = e.voices()
+                langs = sorted({v["lang"].split("-")[0] for v in voices})
+                more = "…" if len(langs) > 12 else ""
+                detail = f"{len(voices)} voices ({', '.join(langs[:12])}{more})"
+                if name == "kokoro":
+                    detail += f", {e.backend()}"  # type: ignore[attr-defined]
+            except Exception as err:
+                ok, detail = False, f"listing voices failed: {err}"
+        else:
+            detail = why
+            if name == "kokoro":
+                detail += ". Fix: ask Claude to set up read-along, or run bin/setup.py"
+            elif name == "espeak" and PLATFORM in INSTALL["espeak"]:
+                detail += f". Fix: {INSTALL['espeak'][PLATFORM]}"
+        lines.append(f"  [{'x' if ok else ' '}] {e.label}: {detail}")
+    auto = engines.auto("main")
+    lines.append(f"Voice 'auto' picks: {auto}" if auto else "Voice 'auto' picks: nothing yet; install one of the engines above")
+    if PLATFORM == "wsl":
+        lines.append("Lowering other apps while reading: available")
+    return "\n".join(lines)
+
+
+def service_python() -> str:
+    """The Python to serve with: the one setup made (or registered) for Kokoro, else this one."""
+    cfg = read_config().get("python")
+    if cfg and os.path.exists(cfg):
+        return cfg
+    venv = os.path.join(data_dir(), "venv", "bin", "python")
+    return venv if os.path.exists(venv) else sys.executable
 
 
 # ---------------------------------------------------------------- HTTP over a Unix socket
@@ -674,11 +634,9 @@ def make_handler(player: Player, server_ref):
             if self.path == "/status":
                 return self._send(player.status())
             if self.path == "/voices":
-                try:
-                    win = player.windows.voices()
-                except Exception as err:
-                    win, player.error = [], f"Windows voices unavailable: {err}"
-                return self._send({"kokoro": KOKORO_VOICES, "windows": win})
+                return self._send({"voices": player.engines.voices()})
+            if self.path == "/info":
+                return self._send(player.info())
             if self.path == "/ping":
                 return self._send({"ok": True, "pid": os.getpid(), "version": VERSION})
             self._send({"error": "not found"}, 404)
@@ -693,15 +651,17 @@ def make_handler(player: Player, server_ref):
                 if self.path == "/set":
                     return self._send(player.set(req))
                 if self.path == "/warm":
-                    # Load the Kokoro pipelines the given voices need, so the first read starts at once.
-                    langs = {v[0] for v in req.get("voices") or ["af_heart"] if v and not v.startswith("win:") and " " not in v}
+                    # Load the engines the given voices need, so the first read starts at once.
+                    wanted = req.get("voices") if isinstance(req.get("voices"), dict) else {}
 
                     def warm():
-                        for lang in sorted(langs):
+                        for group, voice in wanted.items():
                             try:
-                                player.kokoro._pipe(lang)
+                                v = player.engines.resolve(voice, group)
+                                if v:
+                                    player.engines.warm(v)
                             except Exception as err:
-                                log(f"warming '{lang}' failed:", err)
+                                log(f"warming {voice} failed:", err)
 
                     threading.Thread(target=warm, daemon=True).start()
                     return self._send({"ok": True})
@@ -718,46 +678,39 @@ def make_handler(player: Player, server_ref):
     return Handler
 
 
-def alive(path):
+def _request(path, raw, timeout):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(1)
+    s.settimeout(timeout)
     try:
         s.connect(path)
-        s.sendall(b"GET /ping HTTP/1.0\r\n\r\n")
-        return b"200" in s.recv(64)
-    except OSError:
-        return False
-    finally:
-        s.close()
-
-
-def ping(path):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(2)
-    try:
-        s.connect(path)
-        s.sendall(b"GET /ping HTTP/1.0\r\n\r\n")
+        s.sendall(raw)
         data = b""
         while chunk := s.recv(4096):
             data += chunk
-        return json.loads(data.split(b"\r\n\r\n", 1)[1])
-    except (OSError, ValueError, IndexError):
-        return {}
+        return data
     finally:
         s.close()
+
+
+def alive(path):
+    try:
+        return b" 200 " in _request(path, b"GET /ping HTTP/1.0\r\n\r\n", 1)[:20]
+    except OSError:
+        return False
+
+
+def ping(path):
+    try:
+        return json.loads(_request(path, b"GET /ping HTTP/1.0\r\n\r\n", 2).split(b"\r\n\r\n", 1)[1])
+    except (OSError, ValueError, IndexError):
+        return {}
 
 
 def stop(path):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(2)
     try:
-        s.connect(path)
-        s.sendall(b"POST /quit HTTP/1.0\r\nContent-Length: 0\r\n\r\n")
-        s.recv(64)
+        _request(path, b"POST /quit HTTP/1.0\r\nContent-Length: 0\r\n\r\n", 2)
     except OSError:
         pass
-    finally:
-        s.close()
 
 
 def serve(path, idle_exit):
@@ -782,14 +735,11 @@ def serve(path, idle_exit):
 
     threading.Thread(target=watchdog, daemon=True).start()
     signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
-    log("listening on", path)
+    log(f"listening on {path} ({PLATFORM}, {sys.executable})")
     try:
         server.serve_forever()
     finally:
-        player.control({"action": "stop"})
-        player.ducker.close()
-        if player.windows.proc:
-            player.windows.proc.kill()
+        player.close()
         try:
             os.unlink(path)
         except OSError:
@@ -799,15 +749,22 @@ def serve(path, idle_exit):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--socket", default=DEFAULT_SOCKET)
-    ap.add_argument("--idle-exit", type=int, default=1800, help="seconds idle before exiting (frees VRAM)")
+    ap.add_argument("--idle-exit", type=int, default=1800, help="seconds idle before exiting (frees memory)")
     ap.add_argument("--log", default=f"/tmp/read-along-{os.getuid()}.log")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--serve", action="store_true")
     g.add_argument("--ensure", action="store_true")
     g.add_argument("--stop", action="store_true")
+    g.add_argument("--doctor", action="store_true")
     a = ap.parse_args()
 
-    if a.serve:
+    if a.doctor:
+        python = service_python()
+        if os.path.realpath(python) != os.path.realpath(sys.executable):
+            sys.exit(subprocess.run([python, "-I", os.path.abspath(__file__), "--doctor", "--socket", a.socket]).returncode)
+        print(doctor())
+        print(f"Service: running ({a.socket})" if alive(a.socket) else "Service: not running (it starts with the first read)")
+    elif a.serve:
         serve(a.socket, a.idle_exit)
     elif a.stop:
         if alive(a.socket):
@@ -817,18 +774,18 @@ def main():
             if ping(a.socket).get("version") == VERSION:
                 print("running")
                 return
-            stop(a.socket)  # started from an older copy of this file: replace it
+            stop(a.socket)  # started from an older copy of these files: replace it
             for _ in range(50):
                 time.sleep(0.1)
                 if not alive(a.socket):
                     break
         logf = open(a.log, "a")
         subprocess.Popen(
-            [sys.executable, "-I", os.path.abspath(__file__), "--serve", "--socket", a.socket,
+            [service_python(), "-I", os.path.abspath(__file__), "--serve", "--socket", a.socket,
              "--idle-exit", str(a.idle_exit)],
             stdin=subprocess.DEVNULL, stdout=logf, stderr=logf, start_new_session=True, close_fds=True,
         )
-        for _ in range(100):
+        for _ in range(150):
             time.sleep(0.1)
             if alive(a.socket):
                 print("started")

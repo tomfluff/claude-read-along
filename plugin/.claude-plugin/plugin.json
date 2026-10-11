@@ -1,0 +1,117 @@
+{
+  "name": "read-along",
+  "version": "0.9.0",
+  "description": "Listen to Claude's replies while the sentence being read is highlighted. Local voices (Kokoro, or your system's own), several languages, auto-read, and a player above the prompt.",
+  "author": {
+    "name": "Yotam Sechayk",
+    "url": "https://github.com/tomfluff"
+  },
+  "homepage": "https://github.com/tomfluff/claude-read-along",
+  "repository": "https://github.com/tomfluff/claude-read-along",
+  "license": "MIT",
+  "keywords": [
+    "accessibility",
+    "text-to-speech",
+    "tts",
+    "read-aloud",
+    "dyslexia",
+    "low-vision",
+    "kokoro"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "voices": {
+      "type": "string",
+      "title": "Voices",
+      "description": "The voice for each language. auto picks the best one installed. To choose: main=kokoro:af_heart, mac:Samantha; ja=kokoro:jf_alpha; he=win:Microsoft Hila. main reads Latin-script text; ja, zh, ko, he, ar, ru, hi, el and th read their own scripts. The first voice in a list is used; the voice button steps through the main list. /read-along voices lists what's installed.",
+      "default": "auto"
+    },
+    "speed": {
+      "type": "number",
+      "title": "Speed",
+      "description": "Playback speed, 0.5 to 4. Speech is made at normal speed and sped up without changing pitch.",
+      "default": 1.25
+    },
+    "volume": {
+      "type": "number",
+      "title": "Volume",
+      "description": "Speech volume in percent, 0 to 200.",
+      "default": 100
+    },
+    "autoReadReplies": {
+      "type": "string",
+      "title": "Auto-read Claude's replies",
+      "description": "off; final reads each turn's last reply; all also reads the short updates Claude writes between tool calls.",
+      "default": "off",
+      "options": [
+        "off",
+        "final",
+        "all"
+      ]
+    },
+    "autoReadMine": {
+      "type": "boolean",
+      "title": "Auto-read my messages",
+      "description": "Read each message you send.",
+      "default": false
+    },
+    "readCode": {
+      "type": "boolean",
+      "title": "Read code blocks",
+      "description": "Off says \"code block\" in place of each fenced block.",
+      "default": false
+    },
+    "highlight": {
+      "type": "string",
+      "title": "Highlight",
+      "description": "How the sentence being read is marked. reverse swaps the text and background colours, which reads on any theme. Or a background colour, optionally with a text colour after a slash: yellow, #f1fa8c/#282a36.",
+      "default": "reverse"
+    },
+    "buttons": {
+      "type": "string",
+      "title": "Message buttons",
+      "description": "hover shows a message's buttons at its top-right while the pointer is on it (they can flash as messages scroll under a resting pointer); glyph shows them only while the pointer is on the ♪ at its right; always shows them under every message; off hides them (use the player and /read-along).",
+      "default": "hover",
+      "options": [
+        "hover",
+        "glyph",
+        "always",
+        "off"
+      ]
+    },
+    "player": {
+      "type": "string",
+      "title": "Player",
+      "description": "band: a one-row player above the prompt, always there so nothing jumps; hint: progress as dim text on the hint line under the prompt; message: progress and controls under the message being read; band+message: both.",
+      "default": "band",
+      "options": [
+        "band",
+        "hint",
+        "message",
+        "band+message"
+      ]
+    },
+    "icons": {
+      "type": "string",
+      "title": "Icons",
+      "description": "text: plain symbols every terminal has; nerd: Nerd Font media icons, for terminals with a Nerd Font.",
+      "default": "text",
+      "options": [
+        "text",
+        "nerd"
+      ]
+    },
+    "duckOthers": {
+      "type": "string",
+      "title": "Lower other apps while reading",
+      "description": "Windows (through WSL) only for now: turns other apps (music, a browser) down to this share of their own volume while a read plays, and back up when it stops.",
+      "default": "off",
+      "options": [
+        "off",
+        "50%",
+        "30%",
+        "15%"
+      ]
+    }
+  }
+}

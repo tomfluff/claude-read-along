@@ -1,37 +1,41 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, RenderInput } from 'claude-code'
 
-import type { ReadAlongCursor, ReadAlongSettings, ReadAlongStatus } from '../types'
+import type { ReadAlongCursor, ReadAlongInfo, ReadAlongSettings, ReadAlongStatus, ReadAlongVoice } from '../types'
 
-// Read-along: buttons on every message, a band while reading, auto-read, and
-// the sentence being read marked in its message.
+// Read-along: buttons on every message, a player while reading, auto-read,
+// and the sentence being read highlighted in its message.
 // The speech itself is bin/speakd.py, one local service per user that every
 // session shares (so only one voice talks at a time), reached over HTTP on a
-// Unix socket. A voice is a Kokoro name (af_heart) or `win:<Windows voice>`.
+// Unix socket. A voice is `<engine>:<name>` (kokoro:af_heart, win:Microsoft
+// Aria, mac:Samantha, espeak:en-us) or `auto`, the best one installed.
 
 const now = atom({ plugin: 'read-along', key: 'now' } as const, null)
 const current = atom({ plugin: 'read-along', key: 'prefs' } as const, null)
 const cursor = atom({ plugin: 'read-along', key: 'cursor' } as const, null)
+const machine = atom({ plugin: 'read-along', key: 'info' } as const, null)
+const browsing = atom({ plugin: 'read-along', key: 'browsing' } as const, null)
+const installed = atom({ plugin: 'read-along', key: 'voices' } as const, null)
 
 const PANE = 'read-along'
 const SPEED_STEP = 0.25
 const VOLUME_STEP = 10
 /**
  * The player's status icon, by state. `nerd` uses Nerd Font icons (speaker,
- * pause, hourglass), as WezTerm draws them from JetBrainsMono Nerd Font;
- * `text` uses plain symbols for a terminal without one.
+ * pause, hourglass); `text` uses plain symbols, which every terminal has.
  */
 const ICONS = {
   nerd: { idle: '\u{F057E}', playing: '\u{F057E}', paused: '\u{F03E4}', loading: '\u{F051F}' },
   text: { idle: '♫', playing: '♫', paused: '‖', loading: '…' },
 } as const
-const icon = (state: 'idle' | 'playing' | 'paused' | 'loading') => ICONS[str('icons', 'nerd') === 'text' ? 'text' : 'nerd'][state]
+const icons = () => (str('icons', 'text') === 'nerd' ? 'nerd' : 'text')
+const icon = (state: 'idle' | 'playing' | 'paused' | 'loading') => ICONS[icons()][state]
 /** Button glyphs, Nerd Font media controls or their plain-text stand-ins. */
 const BUTTONS = {
   nerd: { play: '\u{F040A}', pause: '\u{F03E4}', stop: '\u{F04DB}', back: '\u{F04AE}', forward: '\u{F04AD}', slower: '\u{F0374}', faster: '\u{F0415}', restart: '\u{F0450}' },
   text: { play: '▶', pause: '‖', stop: '■', back: '«', forward: '»', slower: '−', faster: '+', restart: '⟲' },
 } as const
-const btn = (name: keyof (typeof BUTTONS)['text']) => BUTTONS[str('icons', 'nerd') === 'text' ? 'text' : 'nerd'][name]
+const btn = (name: keyof (typeof BUTTONS)['text']) => BUTTONS[icons()][name]
 const stateOf = (status: ReadAlongStatus) => (status.state === 'paused' ? 'paused' : status.state === 'loading' ? 'loading' : 'playing')
 const DUCK_LEVELS = ['off', '50%', '30%', '15%']
 /** Other apps' volume while reading, as a fraction of their own: `30%` → 0.3, `off` → 1. */
@@ -40,40 +44,72 @@ const duckLevel = (duckOthers: string) => (duckOthers === 'off' ? 1 : Math.max(0
 type $ = EngineInterface
 type Options = Readonly<Record<string, string | number | boolean | readonly string[]>>
 type MessageEvent = RenderInput<'AssistantMessage' | 'UserMessage'>
-type Lang = 'en' | 'ja' | 'he'
 
-const LANGS: { lang: Lang; name: string; field: 'voice' | 'jaVoice' | 'heVoice'; list: 'voices' | 'jaVoices' | 'heVoices' }[] = [
-  { lang: 'en', name: 'English', field: 'voice', list: 'voices' },
-  { lang: 'ja', name: 'Japanese', field: 'jaVoice', list: 'jaVoices' },
-  { lang: 'he', name: 'Hebrew', field: 'heVoice', list: 'heVoices' },
-]
+/**
+ * Voice groups: Latin-script text goes to `main`, every other script to its
+ * own group, so a Japanese sentence in an English reply gets a Japanese voice.
+ */
+const GROUPS: Record<string, string> = {
+  main: 'Main',
+  ja: 'Japanese',
+  zh: 'Chinese',
+  ko: 'Korean',
+  he: 'Hebrew',
+  ar: 'Arabic',
+  ru: 'Cyrillic',
+  hi: 'Hindi',
+  el: 'Greek',
+  th: 'Thai',
+}
 
 let opt: Options = {}
 const str = (k: string, d: string) => (typeof opt[k] === 'string' ? (opt[k] as string) : d)
 const num = (k: string, d: number) => (typeof opt[k] === 'number' ? (opt[k] as number) : d)
 const bool = (k: string, d: boolean) => (typeof opt[k] === 'boolean' ? (opt[k] as boolean) : d)
-const list = (k: string, d: string) =>
-  str(k, d)
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean)
+
+/**
+ * The `voices` setting: `main=kokoro:af_heart, win:Microsoft Aria; ja=auto`.
+ * A list with no `group=` is the main one. Each group's first voice is the
+ * one used; the voice button steps through the main list.
+ */
+export const parseVoices = (text: string): Record<string, string[]> => {
+  const out: Record<string, string[]> = {}
+  for (const part of text.split(';')) {
+    const m = part.match(/^\s*([a-z]{2,4})\s*=(.*)$/)
+    const group = m?.[1] ?? 'main'
+    const voices = (m?.[2] ?? part)
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean)
+    if (voices.length) out[group] = voices
+  }
+  if (!out.main) out.main = ['auto']
+  return out
+}
+
+export const formatVoices = (lists: Record<string, string[]>) =>
+  Object.entries(lists)
+    .filter(([, voices]) => voices.length)
+    .map(([group, voices]) => `${group}=${voices.join(', ')}`)
+    .join('; ')
+
+const favourites = () => parseVoices(str('voices', 'auto'))
 
 const defaults = (): ReadAlongSettings => ({
-  voice: str('englishVoice', 'af_heart'),
-  voices: list('englishVoices', 'af_heart,am_fenrir,bf_emma'),
-  jaVoice: str('japaneseVoice', 'win:Microsoft Nanami Native'),
-  jaVoices: list('japaneseVoices', 'win:Microsoft Nanami Native,win:Microsoft Keita Native,jf_alpha,jm_kumo'),
-  heVoice: str('hebrewVoice', 'win:Microsoft Hila Native'),
-  heVoices: list('hebrewVoices', 'win:Microsoft Hila Native'),
-  speed: num('speed', 2.5),
+  voices: Object.fromEntries(Object.entries(favourites()).map(([g, list]) => [g, list[0] ?? 'auto'])),
+  speed: num('speed', 1.25),
   volume: num('volume', 100),
   duckOthers: str('duckOthers', 'off'),
   autoReadReplies: str('autoReadReplies', 'off'),
   autoReadMine: bool('autoReadMine', false),
 })
 const buttons = () => str('buttons', 'hover')
-/** Where a read's progress and controls show: the band above the prompt, under the message, or both. */
-const controlsAt = () => str('controls', 'bottom')
+/** `player`: band | hint | message | band+message. */
+const playerAt = () => str('player', 'band')
+/** Whether a read's progress shows under its message. */
+const showsUnderMessage = () => playerAt() === 'message' || playerAt() === 'band+message'
+/** The bottom player's form: a band above the prompt, a tail on the hint line, or none. */
+const bottomKind = () => (playerAt() === 'message' ? 'none' : playerAt() === 'hint' ? 'hint' : 'band')
 
 let socketPath = ''
 let isEnsured = false
@@ -86,17 +122,16 @@ async function sock($: $) {
   return socketPath
 }
 
+const speakd = ($: $) => `${$.plugin.root}/bin/speakd.py`
+
 async function ensure($: $) {
   if (isEnsured) return
-  const run = await $.process.run(
-    [str('python', 'python3'), '-I', `${$.plugin.root}/bin/speakd.py`, '--ensure', '--socket', await sock($)],
-    { timeoutMs: 20000 },
-  )
+  const run = await $.process.run(['python3', '-I', speakd($), '--ensure', '--socket', await sock($)], { timeoutMs: 20000 })
   if (run.exitCode !== 0) throw new Error(`speech service didn't start: ${run.stdout || run.stderr}`)
   isEnsured = true
 }
 
-async function call($: $, path: string, body?: unknown): Promise<ReadAlongStatus> {
+async function call<T = ReadAlongStatus>($: $, path: string, body?: unknown): Promise<T> {
   const go = async () => {
     const res = await $.http.fetch(`http://speakd${path}`, {
       method: body === undefined ? 'GET' : 'POST',
@@ -104,7 +139,7 @@ async function call($: $, path: string, body?: unknown): Promise<ReadAlongStatus
       body: body === undefined ? undefined : JSON.stringify(body),
       socketPath: await sock($),
     })
-    return JSON.parse(res.text) as ReadAlongStatus
+    return JSON.parse(res.text) as T
   }
   await ensure($)
   try {
@@ -116,12 +151,35 @@ async function call($: $, path: string, body?: unknown): Promise<ReadAlongStatus
   }
 }
 
-async function settings($: $) {
-  return { ...defaults(), ...((await read($, current)) ?? {}) }
+async function settings($: $): Promise<ReadAlongSettings> {
+  const base = defaults()
+  const s: Partial<ReadAlongSettings> = (await read($, current)) ?? {}
+  return { ...base, ...s, voices: { ...base.voices, ...(s.voices ?? {}) } }
 }
 
 function setSettings($: $, change: Partial<ReadAlongSettings>) {
   return update($, current, s => ({ ...defaults(), ...(s ?? {}), ...change }))
+}
+
+/** What the machine offers (engines, ducking), fetched once a session. */
+async function loadInfo($: $) {
+  try {
+    const info = await call<ReadAlongInfo>($, '/info')
+    await update($, machine, () => info)
+  } catch {
+    // the first read reports it
+  }
+}
+
+/** Every installed voice, for the settings pane's lists. */
+async function loadVoices($: $) {
+  if ((await read($, installed)) !== null) return
+  try {
+    const { voices } = await call<{ voices: ReadAlongVoice[] }>($, '/voices')
+    await update($, installed, () => voices)
+  } catch {
+    // the pane says it couldn't list them
+  }
 }
 
 /**
@@ -137,7 +195,7 @@ async function show($: $, status: ReadAlongStatus) {
   const nextCursor: ReadAlongCursor | null = isIdle || !status.key ? null : { key: status.key, text: status.text ?? '' }
   const at = await read($, cursor)
   if (at?.key !== nextCursor?.key || at?.text !== nextCursor?.text) await update($, cursor, () => nextCursor)
-  if (status.error && status.error !== lastError) $.ui.toast(`Read along: ${status.error}`)
+  if (status.error && status.error !== lastError) $.ui.toast(`Read-along: ${status.error}`)
   lastError = status.error
 }
 
@@ -184,15 +242,13 @@ async function speak($: $, text: string, key: string, label: string, mode: 'now'
       speed: s.speed,
       volume: s.volume / 100,
       duck: duckLevel(s.duckOthers),
-      voice: s.voice,
-      jaVoice: s.jaVoice,
-      heVoice: s.heVoice,
+      voices: s.voices,
       readCode: bool('readCode', false),
     })
     await show($, status)
     poll()
   } catch (err) {
-    $.ui.toast(`Read along: ${String(err)}`)
+    $.ui.toast(`Read-along: ${String(err)}`)
   }
 }
 
@@ -201,7 +257,7 @@ async function control($: $, action: string) {
     await show($, await call($, '/control', { action }))
     poll()
   } catch (err) {
-    $.ui.toast(`Read along: ${String(err)}`)
+    $.ui.toast(`Read-along: ${String(err)}`)
   }
 }
 
@@ -232,25 +288,30 @@ async function readLast($: $) {
   return last !== undefined
 }
 
-/** The voice button on a message: the next English voice. */
+/** The voice button: the next voice in the main list. */
 async function nextVoice($: $) {
   const s = await settings($)
-  const voices = s.voices.length ? s.voices : [s.voice]
-  await setVoice($, 'en', voices[(voices.indexOf(s.voice) + 1) % voices.length] ?? s.voice)
+  const list = favourites().main ?? ['auto']
+  const at = list.indexOf(s.voices.main ?? 'auto')
+  await setVoice($, 'main', list[(at + 1) % list.length] ?? 'auto')
 }
 
-async function setVoice($: $, lang: Lang, voice: string) {
-  const field = LANGS.find(l => l.lang === lang)?.field ?? 'voice'
-  await setSettings($, { [field]: voice })
-  if (await read($, now)) await show($, await call($, '/set', { [field]: voice }))
+async function setVoice($: $, group: string, voice: string) {
+  const s = await settings($)
+  const voices = { ...s.voices, [group]: voice }
+  await setSettings($, { voices })
+  if (await read($, now)) await show($, await call($, '/set', { voices: { [group]: voice } }))
 }
 
 async function saveDefaults($: $) {
   const s = await settings($)
+  // Each group's voice in use goes first in its list, the others stay after it.
+  const lists = favourites()
+  for (const [group, voice] of Object.entries(s.voices)) {
+    lists[group] = [voice, ...(lists[group] ?? []).filter(v => v !== voice)]
+  }
   const fields: [string, string | number | boolean][] = [
-    ['englishVoice', s.voice],
-    ['japaneseVoice', s.jaVoice],
-    ['hebrewVoice', s.heVoice],
+    ['voices', formatVoices(lists)],
     ['speed', s.speed],
     ['volume', s.volume],
     ['duckOthers', s.duckOthers],
@@ -265,6 +326,22 @@ async function saveDefaults($: $) {
   return refused.length ? `Not saved: ${refused.join(', ')}` : 'Saved as the defaults for new sessions.'
 }
 
+/** /read-along doctor: what works on this machine and what to install. */
+async function doctor($: $) {
+  const run = await $.process.run(['python3', '-I', speakd($), '--doctor', '--socket', await sock($)], { timeoutMs: 60000 })
+  return (run.stdout || run.stderr || 'The doctor printed nothing.').trim()
+}
+
+async function restart($: $) {
+  await $.process.run(['python3', '-I', speakd($), '--stop', '--socket', await sock($)], { timeoutMs: 15000 })
+  isEnsured = false
+  await update($, installed, () => null)
+  await loadInfo($)
+}
+
+const SETUP_PROMPT =
+  "Set up read-along for me: check this machine with /read-along doctor, then help me install the Kokoro voices with the plugin's setup skill."
+
 // ------------------------------------------------------------ text helpers
 
 const clock = (seconds = 0) => {
@@ -277,17 +354,24 @@ const bar = (fraction: number, width: number) => {
   return '━'.repeat(filled) + '─'.repeat(width - filled)
 }
 
-const KOKORO_NAMES: Record<string, string> = { af: 'US', am: 'US', bf: 'UK', bm: 'UK', jf: 'JP', jm: 'JP' }
+const KOKORO_ACCENTS: Record<string, string> = { a: 'US', b: 'UK', j: 'JP', z: 'ZH', e: 'ES', f: 'FR', h: 'HI', i: 'IT', p: 'PT' }
+const ENGINE_NAMES: Record<string, string> = { kokoro: 'Kokoro', win: 'Windows', mac: 'macOS', espeak: 'eSpeak' }
 
-/** `af_heart` → heart, `win:Microsoft Ava Native` → Ava (Windows). */
-const voiceName = (voice = '', isLong = false) => {
-  const win = voice.replace(/^win:/, '')
-  if (win !== voice || win.includes(' ')) {
-    const name = win.replace(/^Microsoft /, '').replace(/ (Native|Desktop)$/, '')
-    return isLong ? `${name} (Windows)` : name
+/**
+ * A voice's short name, for buttons and the player: kokoro:af_heart → heart,
+ * win:Microsoft Aria Native → Aria, mac:Samantha → Samantha. `isLong` adds
+ * the engine: heart (Kokoro US). Names from before engines were named (a bare
+ * af_heart, a bare Windows name) still read right.
+ */
+export const voiceName = (voice = '', isLong = false): string => {
+  if (!voice || voice === 'auto') return isLong ? 'auto (best installed)' : 'auto'
+  const [, engine = '', name = ''] = voice.match(/^(kokoro|win|mac|espeak):(.*)$/) ?? ['', voice.includes(' ') ? 'win' : 'kokoro', voice]
+  if (engine === 'kokoro') {
+    const short = name.replace(/^[a-z]{2}_/, '')
+    return isLong ? `${short} (Kokoro ${KOKORO_ACCENTS[name[0] ?? ''] ?? ''})`.replace(' )', ')') : short
   }
-  const name = voice.replace(/^[a-z]{2}_/, '')
-  return isLong ? `${name} (Kokoro ${KOKORO_NAMES[voice.slice(0, 2)] ?? ''})`.replace(' )', ')') : name
+  const short = engine === 'win' ? name.replace(/^Microsoft /, '').replace(/ (Native|Desktop|Online)$/, '') : name
+  return isLong ? `${short} (${ENGINE_NAMES[engine]})` : short
 }
 
 const hash = (text: string) => {
@@ -335,12 +419,24 @@ const markSentence = (raw: string, sentence: string) => {
 }
 
 /** Inline markdown taken out of a piece of the line being read, which is drawn as plain text. */
-const plain = (text: string) => text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\*\*|__|`/g, '')
+const plain = (text: string) => text.replace(/\[([^\]]+)\]\(([^)]*)\)/g, '$1').replace(/\*\*|__|`/g, '')
+
+/**
+ * The `highlight` setting as Text props: `reverse` swaps the text and
+ * background colours, which reads on any theme; else a background colour,
+ * optionally with a text colour after a slash (`#7d1010/#ffffff`).
+ */
+export const highlightProps = (value: string): { inverse?: boolean; backgroundColor?: string; color?: string } => {
+  const v = value.trim()
+  if (!v || v === 'reverse') return { inverse: true }
+  const [bg = '', fg = ''] = v.split('/').map(s => s.trim())
+  return fg ? { backgroundColor: bg, color: fg } : { backgroundColor: bg }
+}
 
 /**
  * The message while one of its sentences is heard, drawn by the mod: the
  * lines before and after stay markdown, and the line being read is text with
- * the sentence on a highlight. Markdown has no background colour, so this is
+ * the sentence highlighted. Markdown has no background colour, so this is
  * the one way to paint one. Undefined where the line is in a table or a code
  * block, which only draw right whole.
  */
@@ -367,8 +463,6 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
   const pre = plain(raw.slice(lineStart + skipped, from))
   const span = plain(raw.slice(from, Math.min(at.end, lineEnd)))
   const post = plain(raw.slice(Math.min(at.end, lineEnd), lineEnd))
-  const hl = str('highlightColor', '#f1fa8c')
-  const fg = str('highlightTextColor', '#282a36')
 
   // marginTop: the engine draws each message with a blank row above it; without
   // it, a message being read sat flush against the one before until reading ended.
@@ -381,9 +475,7 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
           <Text bold={heading !== null}>
             {prefix}
             {pre}
-            <Text backgroundColor={hl} color={fg}>
-              {span}
-            </Text>
+            <Text {...highlightProps(str('highlight', 'reverse'))}>{span}</Text>
             {post}
           </Text>
         </Box>
@@ -407,17 +499,20 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
 // A child left out is an empty list, never `cond && <X/>`: the `false` that
 // leaves behind still takes a row on the terminal.
 
-/** The buttons every message carries, and its progress while it's read. */
 /**
  * What a message carries besides its text: \`below\`, a row under it (the
- * progress while it's read, with \`controls: message\`; the buttons, with
- * \`buttons: always\`), and \`gutter\`, a dim ♪ in a narrow column at its right
- * that shows the buttons while the pointer is on it (\`buttons: hover\`). The
- * hover is the ♪ alone, not the whole message: a pointer resting over the
- * transcript otherwise lit each message that scrolled under it as a message
- * was sent, so buttons flashed up and away.
+ * progress while it's read, with \`player: message\`; the buttons, with
+ * \`buttons: always\`); \`overlay\`, the buttons over its top-right corner while
+ * the pointer is on it (\`buttons: hover\`); and \`gutter\`, a dim ♪ at its
+ * right that shows them while the pointer is on the ♪ alone (\`buttons: glyph\`).
  */
 type MessageExtras = { below: RenderElement | null; gutter: RenderElement | null; overlay: RenderElement | null }
+
+/** The main voice as heard: the one chosen, or what `auto` picks on this machine. */
+async function mainVoice($: $, s: ReadAlongSettings) {
+  const chosen = s.voices.main ?? 'auto'
+  return chosen === 'auto' ? ((await read($, machine))?.auto ?? 'auto') : chosen
+}
 
 async function messageRow($: $, e: MessageEvent, text: string, key: string, label: string): Promise<MessageExtras> {
   const { Box, Text, Button } = $.ui.resolve(e)
@@ -436,7 +531,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
       <Button key={`${id}-slower`} label={btn('slower')} onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
       <Text dimColor>{s.speed}×</Text>
       <Button key={`${id}-faster`} label={btn('faster')} onPress={() => setSpeed($, s.speed + SPEED_STEP)} />
-      <Button key={`${id}-voice`} label={voiceName(s.voice)} onPress={() => nextVoice($)} />
+      <Button key={`${id}-voice`} label={voiceName(await mainVoice($, s))} onPress={() => nextVoice($)} />
     </Box>
   )
 
@@ -461,7 +556,7 @@ async function messageRow($: $, e: MessageEvent, text: string, key: string, labe
       </Box>
     ) : null
 
-  if (status !== null && controlsAt() !== 'bottom') {
+  if (status !== null && showsUnderMessage()) {
     const width = Math.max(8, Math.min(24, (e.viewport?.columns ?? 80) - 60))
     const fraction = status.total ? (status.position ?? 0) / status.total : 0
     const progress = (
@@ -532,7 +627,7 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
           <Text color="magenta" bold>
             {icon('idle')}
             {'  '}
-            {voiceName(s.voice)}
+            {voiceName(await mainVoice($, s))}
           </Text>
           <Text dimColor>
             {'  '}
@@ -540,7 +635,7 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
           </Text>
         </Text>
         <Button key="last" hotkey="r" label="▶ last reply" onPress={() => readLast($)} />
-        <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read along' })} />
+        <Button key="settings" hotkey="o" label="settings" onPress={() => $.ui.open({ id: PANE, title: 'Read-along' })} />
       </Box>
     )
   }
@@ -549,7 +644,7 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
   const fraction = status.total ? (status.position ?? 0) / status.total : 0
   const where = status.sentences ? ` ${(status.sentence ?? 0) + 1}/${status.sentences}` : ''
   const queued = status.queue ? ` +${status.queue}` : ''
-  const voice = voiceName(status.voice ?? s.voice)
+  const voice = voiceName(status.voice ?? (await mainVoice($, s)))
   // Laid out like token-weather's line: icon and voice name in bold colour
   // (where "Showers" sits), then the details. The name is the voice button.
   // Everything but the bar has a fixed width; the bar takes what is left, so the row never wraps.
@@ -585,6 +680,26 @@ async function playerRow($: $, e: RenderInput<'AbovePrompt'>): Promise<RenderEle
   )
 }
 
+/** The installed voices a group can use: its languages', `main` taking the main language's. */
+function voicesFor(all: ReadAlongVoice[], group: string, info: ReadAlongInfo | null) {
+  const langs = group === 'main' ? [info?.mainLanguage ?? 'en'] : (info?.groupLangs?.[group] ?? [group])
+  return all.filter(v => langs.includes(v.lang.toLowerCase().split(/[-_]/)[0] ?? ''))
+}
+
+const HELP = [
+  '/read-along                 the settings',
+  '/read-along read            read the last reply',
+  '/read-along stop | pause',
+  '/read-along speed 1.5',
+  '/read-along voice NAME      the main voice; voice ja NAME for Japanese, and so on',
+  '/read-along voices [GROUP]  list the installed voices',
+  '/read-along auto replies off|final|all, auto mine on|off',
+  "/read-along save            make this session's choices the defaults",
+  '/read-along doctor          what works on this machine, and what to install',
+  '/read-along setup           ask Claude to install the Kokoro voices',
+  '/read-along restart         restart the speech service',
+].join('\n')
+
 export const register: Register = (on, options) => {
   opt = options as Options
 
@@ -593,16 +708,17 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'read-along',
-      description: 'Read along: open its settings, or stop | pause | read | speed N | voice NAME | auto replies off|final|all | auto mine on|off | save',
-      argumentHint: '[stop|pause|read|speed N|voice NAME|auto …|save]',
+      description: 'Read-along: open its settings, or read | stop | pause | speed N | voice NAME | voices | auto … | save | doctor | setup | restart | help',
+      argumentHint: '[read|stop|pause|speed N|voice NAME|voices|auto …|save|doctor|setup|restart|help]',
     })
     ticker?.cancel()
     ticker = $.clock.every(400, () => tick($))
-    // Load the voices' Kokoro pipelines now, so the first read starts at once.
+    // Start the service and load the voices now, so the first read starts at once.
     void (async () => {
       try {
         const s = await settings($)
-        await call($, '/warm', { voices: [s.voice, s.jaVoice, s.heVoice] })
+        await call($, '/warm', { voices: s.voices })
+        await loadInfo($)
       } catch {
         // the first read reports it
       }
@@ -616,7 +732,7 @@ export const register: Register = (on, options) => {
       await speak($, e.text, messageKey('u', e.text), 'your message', 'now')
     }
     return entered
-  }).catch(($, e, next) => next(e)) // reading aloud never holds up a prompt
+  }).catch(($, e, next) => next(e)) // reading never holds up a prompt
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
@@ -643,8 +759,10 @@ export const register: Register = (on, options) => {
     switch (verb) {
       case '':
       case 'settings':
-        await $.ui.open({ id: PANE, title: 'Read along' })
+        await $.ui.open({ id: PANE, title: 'Read-along' })
         return { text: 'Read-along settings opened.' }
+      case 'help':
+        return { text: HELP }
       case 'stop':
       case 'pause':
         await control($, verb === 'stop' ? 'stop' : 'toggle')
@@ -653,18 +771,30 @@ export const register: Register = (on, options) => {
         return { text: (await readLast($)) ? 'Reading the last reply.' : 'No reply to read yet.' }
       case 'speed': {
         const speed = Number(arg)
-        if (!Number.isFinite(speed) || speed <= 0) return { text: 'Usage: /read-along speed 2.5' }
+        if (!Number.isFinite(speed) || speed <= 0) return { text: 'Usage: /read-along speed 1.5' }
         await setSpeed($, speed)
         return { text: `Speed ${(await settings($)).speed}×.` }
       }
       case 'voice': {
-        // voice NAME sets English; voice ja NAME / voice he NAME set the others.
+        // voice NAME sets the main voice; voice ja NAME, voice he NAME set the others.
         const [first = '', ...more] = rest
-        const lang: Lang = first === 'ja' || first === 'he' || first === 'en' ? first : 'en'
-        const voice = (lang === first ? more.join(' ') : arg).trim()
-        if (!voice) return { text: 'Usage: /read-along voice am_fenrir, voice ja jf_alpha, voice he win:Microsoft Hila Native' }
-        await setVoice($, lang, voice)
-        return { text: `${LANGS.find(l => l.lang === lang)?.name} voice: ${voiceName(voice, true)}.` }
+        const group = first in GROUPS ? first : 'main'
+        const voice = (group === first ? more.join(' ') : arg).trim()
+        if (!voice) return { text: 'Usage: /read-along voice kokoro:af_heart, or voice ja kokoro:jf_alpha. /read-along voices lists them.' }
+        await setVoice($, group, voice)
+        return { text: `${GROUPS[group]} voice: ${voiceName(voice, true)}.` }
+      }
+      case 'voices': {
+        await loadVoices($)
+        const all = (await read($, installed)) ?? []
+        if (!all.length) return { text: 'No voices found. /read-along doctor says what to install.' }
+        const info = await read($, machine)
+        const groups = arg && arg in GROUPS ? [arg] : Object.keys(GROUPS)
+        const lines = groups.flatMap(g => {
+          const list = voicesFor(all, g, info)
+          return list.length ? [`${GROUPS[g]} (${g}): ${list.map(v => v.id).join(', ')}`] : []
+        })
+        return { text: lines.join('\n\n') }
       }
       case 'auto': {
         const [what = '', value = ''] = rest
@@ -680,8 +810,17 @@ export const register: Register = (on, options) => {
       }
       case 'save':
         return { text: await saveDefaults($) }
+      case 'doctor':
+        return { text: await doctor($) }
+      case 'setup': {
+        const { isFilled } = await $.prompt.fill({ text: SETUP_PROMPT })
+        return { text: isFilled ? 'A request to set up read-along is in the prompt box: press Enter to send it.' : `Ask Claude: "${SETUP_PROMPT}"` }
+      }
+      case 'restart':
+        await restart($)
+        return { text: 'Speech service stopped; it starts again with the next read.' }
       default:
-        return { text: `Unknown: ${verb}. Try stop, pause, read, speed N, voice NAME, auto …, save.` }
+        return { text: `Unknown: ${verb}.\n${HELP}` }
     }
   })
 
@@ -704,11 +843,11 @@ export const register: Register = (on, options) => {
 
   // The player at the bottom: one row that is always there, idle or reading,
   // so it never pushes the transcript when a read starts or ends. With
-  // `bottom: hint` it is a dim tail on the hint line under the prompt instead.
-  // Other mods draw here too (token-weather, blast-radius): their band stays,
-  // under the player's row, rather than the player hiding it.
+  // `player: hint` it is a dim tail on the hint line under the prompt instead.
+  // Other mods draw here too: their band stays, under the player's row,
+  // rather than the player hiding it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || controlsAt() === 'message' || str('bottom', 'band') !== 'band') return next(e)
+    if (e.props.hasSurvey || bottomKind() !== 'band') return next(e)
     const others = await next(e)
     const { Box, Text } = $.ui.resolve(e)
     // A dim rule, like the one over the prompt, parts the band from the chat.
@@ -725,12 +864,12 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    if (controlsAt() === 'message' || str('bottom', 'band') !== 'hint') return next(e)
+    if (bottomKind() !== 'hint') return next(e)
     const status = await read($, now)
     if (status === null) return next(e)
     const s = await settings($)
     const mark = icon(stateOf(status))
-    const tail = `${mark} ${clock(status.position)}/${clock(status.total)} · ${status.speed ?? s.speed}× ${voiceName(status.voice ?? s.voice)}`
+    const tail = `${mark} ${clock(status.position)}/${clock(status.total)} · ${status.speed ?? s.speed}× ${voiceName(status.voice ?? (await mainVoice($, s)))}`
     return next({ ...e, props: { ...e.props, tail } })
   })
 
@@ -739,22 +878,56 @@ export const register: Register = (on, options) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const s = await settings($)
     const status = await read($, now)
+    const info = await read($, machine)
+    const open = await read($, browsing)
+    const all = (await read($, installed)) ?? []
+    const lists = favourites()
     const pick = (isOn: boolean) => (isOn ? ('primary' as const) : undefined)
+    // Main, plus every group with a voice set; the rest are a click away.
+    const shown = [...new Set(['main', ...Object.keys(lists), ...Object.keys(s.voices)])].filter(g => g in GROUPS)
+    const others = Object.keys(GROUPS).filter(g => !shown.includes(g))
+    const toggle = async (group: string) => {
+      await loadVoices($)
+      await update($, browsing, b => (b === group ? null : group))
+    }
+
     return (
       <Box flexDirection="column" rowGap={1}>
         <Text dimColor>
           {status ? `${status.state} · ${status.label ?? ''} · ${clock(status.position)} of ${clock(status.total)}` : 'Not reading.'}
+          {info?.auto ? `   auto voice here: ${voiceName(info.auto, true)}` : ''}
         </Text>
-        {LANGS.map(({ lang, name, field, list: voices }) => (
-          <Box key={`lang-${lang}`} flexDirection="column">
-            <Text bold>{name} voice</Text>
-            <Box columnGap={1} flexWrap="wrap">
-              {s[voices].map(v => (
-                <Button key={`${lang}-${v}`} label={voiceName(v, true)} variant={pick(v === s[field])} onPress={() => setVoice($, lang, v)} />
-              ))}
+        {shown.map(group => {
+          const chosen = s.voices[group] ?? 'auto'
+          const options = [...new Set(['auto', ...(lists[group] ?? []), chosen])]
+          const more = open === group ? voicesFor(all, group, info).filter(v => !options.includes(v.id)) : []
+          return (
+            <Box key={`group-${group}`} flexDirection="column">
+              <Text bold>{group === 'main' ? 'Voice' : `${GROUPS[group]} voice`}</Text>
+              <Box columnGap={1} flexWrap="wrap">
+                {options.map(v => (
+                  <Button key={`${group}-${v}`} label={voiceName(v, true)} variant={pick(v === chosen)} onPress={() => setVoice($, group, v)} />
+                ))}
+                <Button key={`${group}-more`} label={open === group ? 'fewer' : 'more…'} onPress={() => toggle(group)} />
+              </Box>
+              {more.length
+                ? [
+                    <Box key={`${group}-list`} columnGap={1} flexWrap="wrap">
+                      {more.map(v => (
+                        <Button key={`${group}-all-${v.id}`} label={voiceName(v.id, true)} onPress={() => setVoice($, group, v.id)} />
+                      ))}
+                    </Box>,
+                  ]
+                : []}
             </Box>
-          </Box>
-        ))}
+          )
+        })}
+        <Box columnGap={1} flexWrap="wrap">
+          <Text dimColor>Other languages:</Text>
+          {others.map(g => (
+            <Button key={`add-${g}`} label={GROUPS[g] ?? g} onPress={() => setVoice($, g, 'auto')} />
+          ))}
+        </Box>
         <Box columnGap={1}>
           <Text bold>Speed</Text>
           <Button key="slower" label="−" onPress={() => setSpeed($, s.speed - SPEED_STEP)} />
@@ -767,12 +940,16 @@ export const register: Register = (on, options) => {
           <Text>{s.volume}%</Text>
           <Button key="louder" label="+" onPress={() => setVolume($, s.volume + VOLUME_STEP)} />
         </Box>
-        <Box columnGap={1}>
-          <Text bold>Lower other apps while reading</Text>
-          {DUCK_LEVELS.map(v => (
-            <Button key={`duck-${v}`} label={v === 'off' ? 'off' : `to ${v}`} variant={pick(s.duckOthers === v)} onPress={() => setDuck($, v)} />
-          ))}
-        </Box>
+        {info?.canDuck
+          ? [
+              <Box key="duck" columnGap={1}>
+                <Text bold>Lower other apps while reading</Text>
+                {DUCK_LEVELS.map(v => (
+                  <Button key={`duck-${v}`} label={v === 'off' ? 'off' : `to ${v}`} variant={pick(s.duckOthers === v)} onPress={() => setDuck($, v)} />
+                ))}
+              </Box>,
+            ]
+          : []}
         <Box columnGap={1}>
           <Text bold>Auto-read replies</Text>
           {['off', 'final', 'all'].map(v => (
@@ -791,18 +968,14 @@ export const register: Register = (on, options) => {
           <Button key="stop" label="■ stop" onPress={() => control($, 'stop')} />
         </Box>
         <Box columnGap={1}>
-          <Text bold>Controls while reading</Text>
-          {['bottom', 'message', 'both'].map(v => (
-            <Button key={`controls-${v}`} label={v} variant={pick(controlsAt() === v)} onPress={() => $.config.set({ key: 'read-along.controls', value: v })} />
+          <Text bold>Player</Text>
+          {['band', 'hint', 'message', 'band+message'].map(v => (
+            <Button key={`player-${v}`} label={v} variant={pick(playerAt() === v)} onPress={() => $.config.set({ key: 'read-along.player', value: v })} />
           ))}
         </Box>
-        <Box columnGap={1}>
-          <Text bold>Bottom player</Text>
-          {(['band', 'hint'] as const).map(v => (
-            <Button key={`bottom-${v}`} label={v} variant={pick(str('bottom', 'band') === v)} onPress={() => $.config.set({ key: 'read-along.bottom', value: v })} />
-          ))}
-        </Box>
-        <Text dimColor>The message buttons switch the English voice. Lists and defaults are in /config under read-along; the two rows above save at once.</Text>
+        <Text dimColor>
+          Choices here last for this session until you save them. Voice lists, the highlight, icons and the message buttons are in /config under read-along. /read-along doctor checks this machine.
+        </Text>
       </Box>
     )
   })
