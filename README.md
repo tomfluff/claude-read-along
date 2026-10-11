@@ -13,7 +13,7 @@
 
 A mod for Claude Code: listen to Claude's replies while the sentence being
 read is highlighted in the terminal, so you can follow along with your eyes
-and ears together.
+and ears together. **[Try the demo on its web page](https://sechayk.com/claude-read-along/).**
 
 Read-along is for anyone who would rather hear long replies than read them:
 people with dyslexia, low vision, ADHD or eye strain, people reading in a
@@ -37,7 +37,8 @@ Claude explains something. It is not a screen reader and doesn't replace one.
 ## Hear it
 
 Kokoro voices, made with read-along's own setup on a laptop CPU. Each link
-opens a short MP3.
+opens a short MP3; [the web page](https://sechayk.com/claude-read-along/#hear-it)
+plays them in place, with their text.
 
 | Voice | Language | Sample |
 |---|---|---|
