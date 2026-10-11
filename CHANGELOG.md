@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- The line being read keeps its bold, italics, struck-through text and links
+  (underlined) under the highlight, in the highlight's one colour; it used to
+  turn plain while highlighted.
+- A web address in the line being read keeps the highlight's background.
+- A list item being read keeps Claude Code's `-` marker, and its wrapped lines
+  hang under the text.
+- A table row being read is highlighted too: read-along draws the whole table
+  in Claude Code's box style with that row on the highlight's background
+  (a table too wide for the window keeps Claude Code's drawing, the row in
+  bold). Table rows had no highlight before.
+
 ## 0.9.0 (2026-10-11)
 
 The first public version, renamed from read-aloud: a preview. Used day to day
@@ -13,14 +26,6 @@ on WSL; on Linux and macOS it passes CI but hasn't been tried by hand yet.
   read-along in `enabledPlugins` that draws there without passing the band
   on), read-along says so once, shows the player on the line under the
   prompt meanwhile, and `/read-along doctor` reports it.
-- The line being read keeps its bold, italics, struck-through text and links
-  (underlined) under the highlight, in the highlight's one colour; it used to
-  turn plain while highlighted.
-- A web address in the line being read keeps the highlight's background.
-- A table row being read is highlighted too: read-along draws the whole table
-  in Claude Code's box style with that row on the highlight's background
-  (a table too wide for the window keeps Claude Code's drawing, the row in
-  bold). Table rows had no highlight before.
 - "Read thinking updates" (off by default; `/read-along auto thinking on`):
   with auto-read `all`, also read Claude's thinking, for setups that show it
   as updates in the transcript, where a step can show only thinking before its
