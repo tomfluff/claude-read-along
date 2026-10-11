@@ -5,10 +5,10 @@
 The first public version, renamed from read-aloud: a preview. Used day to day
 on WSL; on Linux and macOS it passes CI but hasn't been tried by hand yet.
 
-- Remote Control: on the Claude mobile app the message buttons show without
-  hovering, and a read's progress shows under its message, as the phone has no
-  player band. `/read-along doctor` lists the surfaces following the session
-  and what each has asked read-along to draw.
+- `/read-along doctor` lists the surfaces following the session and what each
+  has asked read-along to draw. Over Remote Control, the Claude phone and
+  desktop apps show no buttons yet; typed commands work from them
+  ([#6](https://github.com/tomfluff/claude-read-along/issues/6)).
 - When another mod hides the player above the prompt (one listed before
   read-along in `enabledPlugins` that draws there without passing the band
   on), read-along says so once, shows the player on the line under the

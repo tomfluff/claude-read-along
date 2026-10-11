@@ -206,15 +206,14 @@ checked against a pinned SHA-256.
   `"read-along@claude-read-along": true` above that mod in `enabledPlugins`
   and run `/reload-plugins`, or set `player` to `hint` to keep it under the
   prompt.
-- **No buttons in the desktop or mobile app (Remote Control)?** Run
-  `/read-along doctor` in the terminal. Under "Surfaces" it lists each app
-  following the session and what it has asked read-along to draw; an app
-  that has asked for nothing doesn't draw mods yet. On the phone the buttons
-  show all the time, as there is no pointer to hover with. The desktop app
-  following a terminal session through Remote Control draws no mods at all as
-  of Claude Code 2.1.296, so it shows no buttons there; typed commands such as
-  `/read-along read`, `pause`, `stop` and `speed 2` still work from it. The
-  voice always plays on the computer running the session.
+- **No buttons in the phone or desktop app (Remote Control)?** Neither shows
+  read-along's buttons when it follows a terminal session over Remote Control
+  ([#6](https://github.com/tomfluff/claude-read-along/issues/6)); the desktop
+  app draws no mods there at all as of Claude Code 2.1.296. Typed commands such
+  as `/read-along read`, `pause`, `stop` and `speed 2` still work from both, and
+  the voice always plays on the computer running the session.
+  `/read-along doctor` in the terminal lists, under "Surfaces", each app
+  following the session and what it has asked read-along to draw.
 - **The first read is slow.** Kokoro loads its model on the first read of a
   session (a few seconds), then keeps it until the service has been idle for
   30 minutes.
