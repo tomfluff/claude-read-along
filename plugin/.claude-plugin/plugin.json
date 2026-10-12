@@ -1,6 +1,6 @@
 {
   "name": "read-along",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Listen to Claude's replies while the sentence being read is highlighted. Local voices (Kokoro, or your system's own), several languages, auto-read, and a player above the prompt.",
   "author": {
     "name": "Yotam Sechayk",

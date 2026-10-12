@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.2 (2026-10-13)
 
 - While a nested list item is read, the items after it keep their indent;
   the next deeper item used to jump to the left edge, as if a new list began.
