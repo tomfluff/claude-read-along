@@ -611,6 +611,51 @@ export const highlightProps = (value: string): { inverse?: boolean; backgroundCo
 }
 
 /**
+ * The text after the line being read, cut so its indent survives. A markdown
+ * block of its own starts every list at the left edge, so the indented lines
+ * that follow (deeper items of the same list) come apart: each with the lines
+ * under it, dedented, to be drawn at its indent. `rest` is the text from the
+ * first unindented line on; each `gap` is 1 where a blank line came before.
+ */
+export function splitAfter(text: string): { parts: { indent: number; text: string; gap: number }[]; rest: string; restGap: number } {
+  const lines = text.replace(/^\n/, '').split('\n')
+  const blank = (l: string) => !/\S/.test(l)
+  const indentOf = (l: string) => (l.match(/^[ \t]*/)?.[0] ?? '').replace(/\t/g, '    ').length
+  const dedent = (l: string, n: number) => {
+    let k = 0
+    for (let col = 0; k < l.length && col < n && (l[k] === ' ' || l[k] === '\t'); k++) col += l[k] === '\t' ? 4 : 1
+    return l.slice(k)
+  }
+  const parts: { indent: number; text: string; gap: number }[] = []
+  let i = 0
+  for (;;) {
+    let blanks = 0
+    while (i < lines.length && blank(lines[i] ?? '')) {
+      i++
+      blanks++
+    }
+    if (i >= lines.length) return { parts, rest: '', restGap: 0 }
+    const indent = indentOf(lines[i] ?? '')
+    if (indent === 0) return { parts, rest: lines.slice(i).join('\n'), restGap: blanks ? 1 : 0 }
+    // The item and the lines under it: deeper ones, and blank ones before deeper ones.
+    let j = i + 1
+    while (j < lines.length) {
+      if (!blank(lines[j] ?? '')) {
+        if (indentOf(lines[j] ?? '') <= indent) break
+        j++
+        continue
+      }
+      let k = j
+      while (k < lines.length && blank(lines[k] ?? '')) k++
+      if (k >= lines.length || indentOf(lines[k] ?? '') <= indent) break
+      j = k
+    }
+    parts.push({ indent, text: lines.slice(i, j).map(l => dedent(l, indent)).join('\n'), gap: blanks ? 1 : 0 })
+    i = j
+  }
+}
+
+/**
  * The message while one of its sentences is heard, drawn by the mod: the
  * lines before and after stay markdown, and the line being read is text with
  * the sentence highlighted. Markdown has no background colour, so this is
@@ -627,9 +672,8 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
 
   const { Box, Text, Markdown, Link } = $.ui.resolve(e)
   const before = raw.slice(0, lineStart).replace(/\s+$/, '')
-  const after = raw.slice(lineEnd).replace(/^\s+/, '')
+  const after = splitAfter(raw.slice(lineEnd))
   const gapBefore = /\n\s*\n\s*$/.test(raw.slice(0, lineStart)) ? 1 : 0
-  const gapAfter = /^\s*\n\s*\n/.test(raw.slice(lineEnd)) ? 1 : 0
 
   // The line's own markup: a list marker becomes a bullet, a heading goes bold.
   const marker = line.match(/^(\s*)([-*+]|\d+[.)])\s+/)
@@ -673,10 +717,15 @@ function drawRead($: $, e: MessageEvent, raw: string, at: { start: number; end: 
             </Text>
           </Box>
         </Box>
-        {after
+        {after.parts.map(p => (
+          <Box marginTop={p.gap} paddingLeft={p.indent}>
+            <Markdown text={p.text} />
+          </Box>
+        ))}
+        {after.rest
           ? [
-              <Box marginTop={gapAfter}>
-                <Markdown text={after} />
+              <Box marginTop={after.restGap}>
+                <Markdown text={after.rest} />
               </Box>,
             ]
           : []}

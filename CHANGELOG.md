@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- While a nested list item is read, the items after it keep their indent;
+  the next deeper item used to jump to the left edge, as if a new list began.
+
 ## 0.9.1 (2026-10-11)
 
 The highlight follows more of a reply: formatted lines, web addresses, list

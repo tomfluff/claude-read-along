@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, voiceName } from '../hooks/register'
+import { formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceName } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -293,4 +293,41 @@ test('a table row being read is drawn as a whole table, a rule between rows, the
   expect(drawn).toContain('{"backgroundColor":"#7d1010","color":"#ffffff"},"children":["heart"]') // the background, not bold
   expect(drawn.split('├───────┼──────────┤').length - 1).toBe(2) // under the header and between the two rows
   expect(drawn).toContain('That is all.')
+})
+
+test('the lines after the one being read keep their indent', async () => {
+  // Reading "b": "c" sits deeper, "d" back at b's level, "e" at the edge.
+  const t = splitAfter('\n    - c\n      more of c\n  - d\n\n- e\n- f')
+  expect(t.parts).toEqual([
+    { indent: 4, text: '- c\n  more of c', gap: 0 },
+    { indent: 2, text: '- d', gap: 0 },
+  ])
+  expect(t.rest).toBe('- e\n- f')
+  expect(t.restGap).toBe(1)
+  expect(splitAfter('\n\nNext paragraph.')).toEqual({ parts: [], rest: 'Next paragraph.', restGap: 1 })
+  expect(splitAfter('')).toEqual({ parts: [], rest: '', restGap: 0 })
+  // A blank line inside an item stays with it when deeper lines follow.
+  expect(splitAfter('\n  - x\n\n    still x\n- y').parts).toEqual([{ indent: 2, text: '- x\n\n  still x', gap: 0 }])
+})
+
+test('a nested list item being read leaves the deeper item under it indented', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.env(on, { USER: 'tester' })
+  const reply = '- a\n  - b is read.\n    - c stays deeper.\n- d'
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', async ($, e) => {
+    const status = e.url.endsWith('/status') ? { state: 'playing', key: messageKey('a', reply), label: 'reply', text: 'b is read.', sentence: 1, sentences: 4, queue: 0 } : { state: 'idle', queue: 0 }
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(status) } }
+  })
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
+  on('session.start', async ($, e) => ({ cwd: e.cwd }))
+  on('command.register', async ($, e) => ({ value: { command: e.name } }))
+  on('ui.status', async () => ({ value: undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await clock.advance(3300)
+  const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'AssistantMessage', props: { text: reply, isFirstOfReply: true }, requestId: 't1' })
+  const drawn = JSON.stringify(await ui.drawn())
+  expect(drawn).toContain('"paddingLeft":4')
+  expect(drawn).toContain('- c stays deeper.')
+  expect(drawn).toContain('"text":"- d"')
 })
