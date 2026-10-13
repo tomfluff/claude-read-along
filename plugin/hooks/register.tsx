@@ -1452,9 +1452,17 @@ export const register: Register = (on, options) => {
           <Text dimColor>with auto-read all</Text>
         </Box>
         <Box columnGap={1}>
-          <Button key="save" variant="primary" label="save as defaults" onPress={async () => $.ui.toast(await saveDefaults($))} />
+          <Text bold>Player</Text>
+          {['band', 'hint', 'message', 'band+message'].map(v => (
+            <Button key={`player-${v}`} label={v} variant={pick(playerAt() === v)} onPress={() => $.config.set({ key: 'read-along.player', value: v })} />
+          ))}
+        </Box>
+        <Box columnGap={1}>
           <Button key="read-last" label="▶ read last reply" onPress={() => readLast($)} />
           <Button key="stop" label="■ stop" onPress={() => control($, 'stop')} />
+        </Box>
+        <Box columnGap={1}>
+          <Button key="save" variant="primary" label="save as defaults" onPress={async () => $.ui.toast(await saveDefaults($))} />
           <Button key="reset" label="reset…" onPress={() => update($, confirmReset, () => true)} />
         </Box>
         {isAsking
@@ -1474,12 +1482,6 @@ export const register: Register = (on, options) => {
               </Box>,
             ]
           : []}
-        <Box columnGap={1}>
-          <Text bold>Player</Text>
-          {['band', 'hint', 'message', 'band+message'].map(v => (
-            <Button key={`player-${v}`} label={v} variant={pick(playerAt() === v)} onPress={() => $.config.set({ key: 'read-along.player', value: v })} />
-          ))}
-        </Box>
         <Text dimColor>
           Choices here last for this session until you save them. Voice lists, the highlight, icons and the message buttons are in /config under read-along. /read-along reset defaults puts the saved settings back to the plugin's own. /read-along doctor checks this machine.
         </Text>

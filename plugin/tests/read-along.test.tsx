@@ -358,3 +358,33 @@ test("the plugin's own defaults come from its manifest's userConfig", async () =
   ])
   expect(factoryDefaults('{}')).toEqual([])
 })
+
+const paneSetup = async ($: Parameters<Parameters<typeof test>[2]>[0], on: Parameters<Parameters<typeof test>[2]>[1]) => {
+  mock.env(on, { USER: 'tester' })
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ state: 'idle', queue: 0 }) } }))
+  on('session.start', async ($, e) => ({ cwd: e.cwd }))
+  on('command.register', async ($, e) => ({ value: { command: e.name } }))
+  on('ui.status', async () => ({ value: undefined }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'Pane', props: {}, requestId: 'read-along' })
+  return JSON.stringify(await ui.drawn())
+}
+
+test('by default the settings show the main voice alone, the other languages a click away', async ($, on) => {
+  const drawn = await paneSetup($, on)
+  expect(drawn).not.toContain('Japanese voice')
+  expect(drawn).toContain('"label":"Japanese"') // under Other languages
+  expect(drawn).toContain('"label":"Hebrew"')
+  // The actions sit under the player choice: read and stop, then save and reset.
+  const at = (label: string) => drawn.indexOf(`"label":"${label}"`)
+  expect(at('band+message')).toBeLessThan(at('▶ read last reply'))
+  expect(at('■ stop')).toBeLessThan(at('save as defaults'))
+  expect(at('save as defaults')).toBeLessThan(at('reset…'))
+})
+
+test('saved voices for a language keep it shown in the settings', { options: { voices: 'main=auto; ja=kokoro:jf_alpha; he=win:Microsoft Hila Native' } }, async ($, on) => {
+  const drawn = await paneSetup($, on)
+  expect(drawn).toContain('Japanese voice')
+  expect(drawn).toContain('Hebrew voice')
+})
