@@ -51,6 +51,10 @@ DUCK_RELEASE = 0.8  # seconds after a read stops before other apps come back up
 # The audio buffer. WSLg's PulseAudio bridge crackles below about 300 ms.
 LATENCY = 0.3 if PLATFORM == "wsl" else 0.15
 PREBUFFER = 1.5  # seconds of speech (as heard) ready before playback starts
+# A streaming engine (Pocket TTS) keeps making speech while it plays, so it
+# starts sooner: this many 1x seconds per 1x of speed ready.
+STREAM_PREBUFFER = 0.5
+AHEAD = 2  # sentences of the next queued read made while the current one plays
 GAP = b"\0\0" * int(RATE * 0.12)  # breath between sentences
 
 
@@ -280,6 +284,8 @@ class Job:
         self.say = say_pairs(req.get("say"))
         self.durations: dict[int, float] = {}  # 1x seconds per sentence, once synthesized
         self.cache: dict[tuple, bytes] = {}
+        self.making = threading.Lock()  # one sentence made at a time, so none is made twice
+        self.made_all = False  # every sentence from the run's start is made: time to make the next read's
 
 
 class Player:
@@ -298,6 +304,8 @@ class Player:
         self.error = None
         self.sec_per_char = SEC_PER_CHAR_1X
         self.last_active = time.time()
+        self.ahead = threading.Event()  # set when the next queued read may be made ahead
+        threading.Thread(target=self._make_ahead, daemon=True).start()
 
     # -- synthesis routing
 
@@ -306,19 +314,28 @@ class Player:
         group = script_of(sentence, job.voices)
         return group, self.engines.resolve(job.voices.get(group), group)
 
-    def synth(self, job, i):
+    def synth(self, job, i, piece=None):
+        """Sentence i's speech, made once per voice. `piece`, when given, hears
+        the speech in pieces as a streaming engine makes them."""
         sentence = job.sentences[i]
         group, voice = self.voice_for(job, sentence)
         key = (i, voice)
-        if key not in job.cache:
+        with job.making:
+            if key in job.cache:
+                return job.cache[key]
             if not voice:
                 raise RuntimeError("no voice installed for this language; see /read-along doctor")
             text = spoken(sentence, job.say)
+            parts: list[bytes] = []
             try:
-                audio = self.engines.synth(voice, text)
+                for part in self.engines.stream(voice, text):
+                    parts.append(part)
+                    if piece:
+                        piece(part)
+                audio = b"".join(parts)
             except Exception as err:  # once with the best other voice, then give up on the sentence
                 fallback = self.engines.auto(group)
-                if not fallback or fallback == voice:
+                if parts or not fallback or fallback == voice:  # parts: some of it was heard already
                     raise
                 log(f"{voice} failed, using {fallback}:", err)
                 self.error = f"{voice} failed ({err}); using {fallback}."
@@ -328,7 +345,28 @@ class Player:
             job.durations[i] = seconds
             if len(sentence) > 20:
                 self.sec_per_char = 0.8 * self.sec_per_char + 0.2 * (seconds / len(sentence))
-        return job.cache[key]
+            return audio
+
+    def _make_ahead(self):
+        """Make the next queued read's opening sentences once the current
+        read's are all made, so it starts as soon as the current one ends."""
+        while True:
+            self.ahead.wait()
+            self.ahead.clear()
+            while True:
+                with self.lock:
+                    job = self.queue[0] if self.queue else None
+                    if not job or (self.job and not self.job.made_all):
+                        break
+                    todo = [i for i in range(min(AHEAD, len(job.sentences)))
+                            if (i, self.voice_for(job, job.sentences[i])[1]) not in job.cache]
+                if not todo:
+                    break
+                try:
+                    self.synth(job, todo[0])
+                except Exception as err:  # the read itself will try again, and report it
+                    log("making ahead failed:", err)
+                    break
 
     # -- runs: one player process fed sentences from `start` on
     #
@@ -344,14 +382,27 @@ class Player:
         self.player = None
 
     def _produce(self, job, start, token, out):
+        """Put (sentence, speech, whole) on `out`: the pieces a streaming engine
+        makes as they come, then the rest of the sentence with whole=True."""
+        job.made_all = False
         try:
             for i in range(start, len(job.sentences)):
                 if token != self.run_token:
                     return
-                out.put((i, self.synth(job, i)))
+                sent = [0]
+
+                def piece(part, i=i, sent=sent):
+                    sent[0] += len(part)
+                    out.put((i, part, False))
+
+                audio = self.synth(job, i, piece)
+                out.put((i, audio[sent[0]:], True))  # all of it when it came from the cache
         except Exception as err:
             out.put(err)
             return
+        if token == self.run_token:  # not a run that was replaced while making its last sentence
+            job.made_all = True
+            self.ahead.set()
         out.put(None)
 
     def _run(self, job, start, token):
@@ -360,8 +411,9 @@ class Player:
         speed = job.speed
         kind = find_player()
         ready: queue.Queue = queue.Queue()
-        pending, buffered, done = [], 0.0, False
+        pending, buffered, done, streaming = [], 0.0, False, False
         written = 0.0
+        heard: set[int] = set()  # sentences whose start is written
         player = None
         try:
             if kind is None:
@@ -376,11 +428,14 @@ class Player:
                 if item is None:
                     done = True
                 else:
-                    i, audio = item
-                    pending.append((i, audio + GAP))
+                    i, audio, whole = item
+                    streaming = streaming or not whole
+                    pending.append((i, audio + GAP if whole else audio))
                     buffered += len(pending[-1][1]) / 2 / RATE
-                # Prebuffer: start once PREBUFFER seconds (as heard) are ready, or all of it.
-                if player is None and not done and buffered / speed < PREBUFFER:
+                # Prebuffer: start once PREBUFFER seconds (as heard) are ready, or all of
+                # it; a stream once STREAM_PREBUFFER seconds per 1x of speed are.
+                if player is None and not done and (
+                        buffered < STREAM_PREBUFFER * max(1.0, speed) if streaming else buffered / speed < PREBUFFER):
                     continue
                 with self.lock:
                     if token != self.run_token:
@@ -393,7 +448,9 @@ class Player:
                         self.run_started = time.time() + LATENCY + LEAD_IN / speed
                         self.state = "playing"
                     for i, buf in pending:
-                        self.run_offsets.append((written, i))
+                        if i not in heard:
+                            heard.add(i)
+                            self.run_offsets.append((written, i))
                         written += len(buf) / 2 / RATE
                 chunk = b"".join(buf for _, buf in pending)
                 pending = []
@@ -475,6 +532,7 @@ class Player:
                 f"queued before: {len(self.queue)}{' (dropped)' if mode != 'queue' and self.queue else ''}")
             if mode == "queue" and self.job:
                 self.queue.append(job)
+                self.ahead.set()
             else:
                 if mode != "queue":
                     self.queue.clear()

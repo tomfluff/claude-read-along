@@ -5,6 +5,7 @@
 
 import os
 import sys
+import time
 import unittest
 import wave
 from array import array
@@ -179,6 +180,75 @@ class Text(unittest.TestCase):
 
     def test_sentences(self):
         self.assertEqual(speakd.split_sentences("One. Two! 三つ。四つ"), ["One.", "Two!", "三つ。", "四つ"])
+
+
+class FakeEngines:
+    """Speech of 0.1 s per word, streamed a word at a time."""
+
+    def __init__(self):
+        self.made = []
+
+    def resolve(self, voice, group):
+        return "fake:v"
+
+    def auto(self, group):
+        return None
+
+    def stream(self, voice, text):
+        self.made.append(text)
+        for _ in text.split():
+            yield b"\1\0" * int(engines.RATE * 0.1)
+
+    def synth(self, voice, text):
+        return b"".join(self.stream(voice, text))
+
+
+class Making(unittest.TestCase):
+    def player(self):
+        p = speakd.Player()
+        p.engines = FakeEngines()
+        return p
+
+    def test_a_stream_is_heard_in_pieces_and_made_once(self):
+        p = self.player()
+        job = speakd.Job({"text": "One two three."})
+        pieces = []
+        audio = p.synth(job, 0, pieces.append)
+        self.assertEqual(len(pieces), 3)
+        self.assertEqual(b"".join(pieces), audio)
+        self.assertAlmostEqual(job.durations[0], 0.3)
+        self.assertEqual(p.synth(job, 0, pieces.append), audio)  # from the cache, no pieces
+        self.assertEqual((len(pieces), p.engines.made), (3, ["One two three."]))
+
+    def test_the_producer_passes_pieces_then_the_rest(self):
+        import queue
+
+        p = self.player()
+        job = speakd.Job({"text": "One two. Three."})
+        p.synth(job, 1)  # made ahead: comes whole
+        out = queue.Queue()
+        p._produce(job, 0, p.run_token, out)
+        items = []
+        while (item := out.get()) is not None:
+            items.append((item[0], len(item[1]), item[2]))
+        piece = int(engines.RATE * 0.1) * 2
+        self.assertEqual(items, [(0, piece, False), (0, piece, False), (0, 0, True), (1, piece, True)])
+        self.assertTrue(job.made_all)
+
+    def test_the_next_queued_read_is_made_ahead(self):
+        p = self.player()
+        now, queued = speakd.Job({"text": "Now."}), speakd.Job({"text": "First. Second. Third."})
+        p.job, p.queue = now, [queued]
+        p.ahead.set()  # the current read isn't all made yet: nothing happens
+        time.sleep(0.2)
+        self.assertEqual(p.engines.made, [])
+        now.made_all = True
+        p.ahead.set()
+        for _ in range(50):
+            if len(queued.cache) == speakd.AHEAD:
+                break
+            time.sleep(0.02)
+        self.assertEqual(p.engines.made, ["First.", "Second."])
 
 
 if __name__ == "__main__":

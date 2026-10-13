@@ -220,6 +220,10 @@ class Engine:
     def synth(self, text: str, voice: str) -> bytes:
         raise NotImplementedError
 
+    def stream(self, text: str, voice: str):
+        """The speech in pieces as they are made; engines that can't stream give it whole."""
+        yield self.synth(text, voice)
+
     def warm(self, voice: str):
         pass
 
@@ -775,25 +779,47 @@ class Pocket(Engine):
         log(f"pocket tts loaded in {time.time() - t:.1f}s ({threads} threads, "
             f"{'clones recordings' if self.cloning else 'built-in voices and voice states only'})")
 
-    def _ask(self, req: dict) -> str:
+    def _send(self, req: dict):
+        """Write a request to the worker, started if need be; hold `self.lock`."""
         name = req["voice"]
         voice = self.own().get(name) or (name if name in POCKET_BUILTIN else None)
         if not voice:
             raise RuntimeError(f"no Pocket TTS voice named {name}")
-        with self.lock:
-            self._start()
-            self.proc.stdin.write(json.dumps(dict(req, voice=voice, language=self.language()[1]), ensure_ascii=False) + "\n")
-            self.proc.stdin.flush()
-            line = self.proc.stdout.readline().strip()
+        self._start()
+        self.proc.stdin.write(json.dumps(dict(req, voice=voice, language=self.language()[1]), ensure_ascii=False) + "\n")
+        self.proc.stdin.flush()
+
+    @staticmethod
+    def _answer(line: str) -> str:
         if not line.startswith("OK"):
             raise RuntimeError(line[4:] or "Pocket TTS stopped; see the service log")
         return line[3:]
+
+    def _ask(self, req: dict) -> str:
+        with self.lock:
+            self._send(req)
+            line = self.proc.stdout.readline().strip()
+        return self._answer(line)
 
     def warm(self, voice):
         self._ask({"op": "warm", "voice": voice})
 
     def synth(self, text, voice):
         return resample(base64.b64decode(self._ask({"text": text, "voice": voice})), self.rate)
+
+    def stream(self, text, voice):
+        """Pieces of about 80 ms as Pocket TTS decodes them (its own
+        `generate_audio_stream`), so playback starts within a fraction of a second."""
+        with self.lock:
+            self._send({"text": text, "voice": voice, "stream": True})
+            line = ""
+            try:
+                while (line := self.proc.stdout.readline().strip()).startswith("PART "):
+                    yield resample(base64.b64decode(line[5:]), self.rate)
+            finally:  # a stream left early is read to its end, so the next answer lines up
+                while line.startswith("PART "):
+                    line = self.proc.stdout.readline().strip()
+        self._answer(line)
 
     def close(self):
         if self.proc and self.proc.poll() is None:
@@ -862,6 +888,10 @@ class Engines:
     def synth(self, voice: str, text: str) -> bytes:
         engine, name = self.split(voice)
         return self.by_name[engine].synth(text, name)
+
+    def stream(self, voice: str, text: str):
+        engine, name = self.split(voice)
+        return self.by_name[engine].stream(text, name)
 
     def warm(self, voice: str):
         engine, name = self.split(voice)

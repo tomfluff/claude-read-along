@@ -23,6 +23,11 @@
   saved settings back to the plugin's own. Both ask first.
 - The settings list the voices in rows by engine, your own voices first, and
   ask the service for them each time, so newly installed voices show up.
+- Pocket TTS starts speaking sooner: its speech is streamed, using Pocket
+  TTS's own `generate_audio_stream`, so playback begins after about a quarter
+  of a second instead of after the whole first sentence.
+- A queued read (auto-read's next update, say) has its first sentences made
+  while the current read plays, so it follows without a pause.
 
 ## 0.9.2 (2026-10-13)
 
