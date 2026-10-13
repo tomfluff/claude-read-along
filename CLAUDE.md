@@ -54,8 +54,11 @@ compares their mtimes), so `/reload-plugins` plus the next read is enough.
   a mod that answers it without calling `next(e)` hides every mod after it
   (token-weather and replay-theater did). read-along checks for this itself.
 - In `claude plugin test`, the test's bottom hooks answer `process.run`,
-  `http.fetch`, `ui.toast` and `command.register` as `{ value: ... }`
+  `http.fetch`, `ui.toast`, `model.complete` and `command.register` as `{ value: ... }`
   (`session.start` as `{ cwd }`); use `mock.env` and `mock.clock` for those.
+  The test's `$.command.run` doesn't reach the mod's own command; press a
+  pane button instead. The mod's environment has no `AbortSignal.timeout`;
+  `$.model.complete` takes `timeoutMs`.
 - Over Remote Control, the Claude phone and desktop apps draw no mods
   (2.1.296): no buttons, toasts or status line. Typed commands work (#6).
 - GitHub READMEs play no video or audio from repository files: relative links,

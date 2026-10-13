@@ -168,6 +168,15 @@ class Text(unittest.TestCase):
         self.assertIn("Bold and a link to code.", " ".join(text.split()))
         self.assertIn("(Code block.)", text)
 
+    def test_say_swaps_written_forms_for_spoken_ones(self):
+        pairs = speakd.say_pairs([["0.9", "zero point nine"], ["v0.9.1", "version zero point nine point one"],
+                                  ["", "x"], ["a"], [1, 2], ["%", "percent"]])
+        self.assertEqual(pairs[0][0], "v0.9.1")  # longest first
+        self.assertEqual(speakd.spoken("Update to v0.9.1, then 0.9 is 90%.", pairs),
+                         "Update to version zero point nine point one, then zero point nine is 90percent.")
+        self.assertEqual(speakd.spoken("Nothing here.", []), "Nothing here.")
+        self.assertEqual(speakd.say_pairs("not a list"), [])
+
     def test_sentences(self):
         self.assertEqual(speakd.split_sentences("One. Two! 三つ。四つ"), ["One.", "Two!", "三つ。", "四つ"])
 

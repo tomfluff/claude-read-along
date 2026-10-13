@@ -105,6 +105,7 @@ const defaults = (): ReadAlongSettings => ({
   autoReadReplies: str('autoReadReplies', 'off'),
   autoReadMine: bool('autoReadMine', false),
   readThinking: bool('readThinking', false),
+  rewriteForSpeech: bool('rewriteForSpeech', false),
 })
 /** The message buttons' form on a surface. The phone has no pointer to hover with, so it shows them. */
 const buttons = (surface: RenderSurface = 'terminal') => {
@@ -307,11 +308,65 @@ async function tick($: $) {
   }
 }
 
+const SAY_SYSTEM = [
+  'You prepare text for a text-to-speech voice. List every span in the text that a voice would read wrongly or awkwardly as written:',
+  'numbers, versions, dates, times, money, percentages, units, ranges, symbols and operators, abbreviations, acronyms read as letters, file names and paths, code identifiers.',
+  'For each, give the exact text as written (without markdown backticks or asterisks) and how a person would say it aloud, in the language of the sentence around it.',
+  'Leave ordinary words alone. Answer with a JSON array of [written, spoken] pairs and nothing else; [] when there is nothing to change.',
+  'Example: [["v0.9.1", "version zero point nine point one"], ["2.5x", "two and a half times"], ["~/.claude", "the home dot claude folder"]]',
+].join(' ')
+
+/** Text worth asking about: digits, symbols, capitals in a row, or a dot inside a word. */
+const NEEDS_WORDS = /[0-9%$€£¥#@&\/\\_~^<>=+|]|\b[A-Z]{2,}\b|\w\.\w/
+
+/** The pairs from Haiku's answer: a JSON array of [written, spoken], each written form found in the text. */
+export const parseSayPairs = (answer: string, text: string): [string, string][] => {
+  const json = answer.slice(answer.indexOf('['), answer.lastIndexOf(']') + 1)
+  try {
+    const raw: unknown = JSON.parse(json)
+    if (!Array.isArray(raw)) return []
+    return raw
+      .filter((p): p is [string, string] => Array.isArray(p) && p.length === 2 && typeof p[0] === 'string' && typeof p[1] === 'string')
+      .map(([written, said]): [string, string] => [written.replace(/[`*]/g, '').trim(), said.trim()])
+      .filter(([written, said]) => written && said && written.length <= 200 && said.length <= 400 && text.includes(written))
+      .slice(0, 200)
+  } catch {
+    return []
+  }
+}
+
+let hasSaidSayFailed = false
+
+/** How to say a message's numbers and symbols, asked of Claude Haiku once per message. */
+const sayCache = new Map<string, [string, string][]>()
+async function sayPairs($: $, text: string, key: string): Promise<[string, string][]> {
+  if (!NEEDS_WORDS.test(text)) return []
+  const known = sayCache.get(key)
+  if (known) return known
+  // `haiku` is the alias for the latest Haiku, so this follows new releases.
+  const r = await $.model.complete({ model: 'haiku', system: SAY_SYSTEM, prompt: text, maxTokens: 4000, effort: 'low', timeoutMs: 10000 })
+  const pairs = r.isAnswered ? parseSayPairs(r.text, text) : []
+  if (r.isAnswered) {
+    if (sayCache.size > 100) sayCache.delete(sayCache.keys().next().value ?? '')
+    sayCache.set(key, pairs)
+  }
+  return pairs
+}
+
 async function speak($: $, text: string, key: string, label: string, mode: 'now' | 'queue') {
   if (!text.trim()) return
   const s = await settings($)
+  // Read as written when Haiku fails or is slow: the words matter more than their form.
+  const say = s.rewriteForSpeech
+    ? await sayPairs($, text, key).catch(err => {
+        if (!hasSaidSayFailed) $.ui.toast(`Read-along: couldn't ask Claude Haiku how to say numbers (${String(err)}); reading as written.`)
+        hasSaidSayFailed = true
+        return []
+      })
+    : []
   try {
     const status = await call($, '/speak', {
+      say,
       text,
       key,
       label,
@@ -395,6 +450,7 @@ async function saveDefaults($: $) {
     ['autoReadReplies', s.autoReadReplies],
     ['autoReadMine', s.autoReadMine],
     ['readThinking', s.readThinking],
+    ['rewriteForSpeech', s.rewriteForSpeech],
   ]
   const refused: string[] = []
   for (const [field, value] of fields) {
@@ -1124,6 +1180,7 @@ const HELP = [
   '/read-along voice NAME      the main voice; voice ja NAME for Japanese, and so on',
   '/read-along voices [GROUP]  list the installed voices',
   '/read-along auto replies off|final|all, auto mine on|off, auto thinking on|off',
+  '/read-along words on|off    say numbers and symbols as words (asks Claude Haiku first)',
   "/read-along save            make this session's choices the defaults",
   "/read-along reset           this session's choices back to the saved defaults (asks first)",
   "/read-along reset defaults  the saved settings back to the plugin's own (asks first)",
@@ -1140,8 +1197,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'read-along',
-      description: 'Read-along: open its settings, or read | stop | pause | speed N | voice NAME | voices | auto … | save | reset | doctor | setup | restart | help',
-      argumentHint: '[read|stop|pause|speed N|voice NAME|voices|auto …|save|reset [defaults]|doctor|setup|restart|help]',
+      description: 'Read-along: open its settings, or read | stop | pause | speed N | voice NAME | voices | auto … | words on|off | save | reset | doctor | setup | restart | help',
+      argumentHint: '[read|stop|pause|speed N|voice NAME|voices|auto …|words on|off|save|reset [defaults]|doctor|setup|restart|help]',
     })
     ticker?.cancel()
     ticker = $.clock.every(400, () => tick($))
@@ -1268,6 +1325,13 @@ export const register: Register = (on, options) => {
           return { text: `Read thinking updates: ${value}${value === 'on' && (await settings($)).autoReadReplies !== 'all' ? ' (with auto-read replies set to all)' : ''}.` }
         }
         return { text: 'Usage: /read-along auto replies off|final|all, auto mine on|off, or auto thinking on|off' }
+      }
+      case 'words': {
+        if (!['on', 'off'].includes(arg)) return { text: 'Usage: /read-along words on|off' }
+        await setSettings($, { rewriteForSpeech: arg === 'on' })
+        return {
+          text: `Say numbers and symbols as words: ${arg}.${arg === 'on' ? ' Each message read goes to Claude Haiku once, through this session, before it is read.' : ''}`,
+        }
       }
       case 'save':
         return { text: await saveDefaults($) }
@@ -1451,6 +1515,15 @@ export const register: Register = (on, options) => {
           ))}
           <Text dimColor>with auto-read all</Text>
         </Box>
+        <Box columnGap={1}>
+          <Text bold>Say numbers and symbols as words</Text>
+          {(['off', 'on'] as const).map(v => (
+            <Button key={`words-${v}`} label={v} variant={pick(s.rewriteForSpeech === (v === 'on'))} onPress={() => setSettings($, { rewriteForSpeech: v === 'on' })} />
+          ))}
+        </Box>
+        <Text dimColor>
+          Optional, off by default. When on, each message is sent once to Claude Haiku through this session before it is read, to learn how to say its numbers, versions and symbols. That uses a little of your Claude usage and adds a second or two before reading starts. Speech itself is still made on this machine.
+        </Text>
         <Box columnGap={1}>
           <Text bold>Player</Text>
           {['band', 'hint', 'message', 'band+message'].map(v => (

@@ -61,6 +61,12 @@
       "description": "With auto-read 'all', also read Claude's thinking where your Claude Code shows it as updates. Off by default: Claude Code doesn't tell read-along whether thinking is on screen.",
       "default": false
     },
+    "rewriteForSpeech": {
+      "type": "boolean",
+      "title": "Say numbers and symbols as words",
+      "description": "Before a message is read, Claude Haiku (through your Claude Code session) lists how to say its numbers, versions, symbols and abbreviations, and the voice says those. The text on screen doesn't change. Off by default: it sends each message read to Claude once, and uses a little of your Claude usage.",
+      "default": false
+    },
     "readCode": {
       "type": "boolean",
       "title": "Read code blocks",

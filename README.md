@@ -35,7 +35,8 @@ Claude explains something. It is not a screen reader and doesn't replace one.
 - **Several languages in one reply.** Japanese, Chinese, Korean, Hebrew,
   Arabic, Cyrillic, Hindi, Greek and Thai sentences each get their own voice.
 - **Local and private.** Speech is made on your machine. Nothing you read is
-  sent anywhere.
+  sent anywhere, unless you turn on the optional
+  [numbers as words](#numbers-and-symbols-as-words) setting.
 - **Fast without chipmunk voices.** Speeds up to 4× keep the voice's pitch.
 
 ## Hear it
@@ -192,6 +193,7 @@ repository and run `claude plugin validate .` in it.
 | `/read-along auto replies all` | auto-read: `off`, `final` (each turn's last reply) or `all` |
 | `/read-along auto mine on` | also read your own messages |
 | `/read-along auto thinking on` | with auto-read `all`, also read Claude's thinking where it's shown as updates |
+| `/read-along words on` | say numbers and symbols as words (optional; asks Claude Haiku, see below) |
 | `/read-along save` | keep this session's choices as the defaults |
 | `/read-along reset` | put this session's choices back to your saved defaults (asks first; also "reset…" in the settings) |
 | `/read-along reset defaults` | put the saved settings back to the plugin's own (says what changes, then asks) |
@@ -211,6 +213,7 @@ All in `/config` under read-along.
 | Auto-read Claude's replies | off | `off`, `final`, `all`. |
 | Auto-read my messages | off | |
 | Read thinking updates | off | With auto-read `all`, also read Claude's thinking. Turn it on where your Claude Code shows thinking as updates in the transcript; Claude Code doesn't tell read-along whether it's shown. |
+| Say numbers and symbols as words | off | Optional: asks Claude Haiku how to say a message's numbers and symbols before reading it. See [below](#numbers-and-symbols-as-words). |
 | Read code blocks | off | Off says "code block" instead. |
 | Highlight | `reverse` | Swaps text and background colours, which works on any theme. Or a colour: `yellow`, `#f1fa8c/#282a36` (background/text). |
 | Message buttons | hover | `hover`, `glyph` (only over a ♪ at the message's right; no flashing while scrolling), `always`, `off`. |
@@ -243,6 +246,26 @@ main=kokoro:af_heart, kokoro:bf_emma, mac:Samantha; ja=kokoro:jf_alpha; he=mac:C
 If your Latin-script text isn't English, tell `auto` which language it is:
 `python3 <plugin folder>/bin/setup.py language es`.
 
+### Numbers and symbols as words
+
+Voices read some written forms badly: `v0.9.1`, `2.5x`, `~/.claude`, `->`,
+`API`. With **Say numbers and symbols as words** on (in the settings, or
+`/read-along words on`), read-along first asks Claude Haiku how a person
+would say each such span in a message, and the voice says that. The message
+on screen stays as written, and the highlight still follows it.
+
+It's optional and off by default, because it changes what leaves your
+machine:
+
+- Each message read is sent once to Claude Haiku, through your own Claude
+  Code session. That text came from Claude in the first place, but with this
+  on, "nothing you read is sent anywhere" no longer holds.
+- It uses a little of your Claude usage, and reading starts a second or two
+  later. A message with no digits, symbols or abbreviations isn't sent.
+- If Haiku fails or takes over 10 seconds, the message is read as written.
+
+It uses the `haiku` alias, so it follows the newest Haiku model.
+
 ## Privacy
 
 The mod runs a small speech service on your machine. It is reached over a
@@ -253,7 +276,9 @@ packages come from PyPI and Kokoro's model from the
 checked against a pinned SHA-256; and, if you install Pocket TTS, by Pocket
 TTS fetching its model and built-in voices from Hugging Face the first time
 each is used. What you read is never sent anywhere, and neither are your
-voice recordings.
+voice recordings, with one optional exception: with
+[numbers as words](#numbers-and-symbols-as-words) on, each message read goes
+once to Claude Haiku through your Claude Code session.
 
 ## Troubleshooting
 

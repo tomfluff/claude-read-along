@@ -91,6 +91,29 @@ def speakable(text: str, read_code: bool) -> str:
     return text
 
 
+def say_pairs(raw) -> list[tuple[str, str]]:
+    """The request's `say` list, `[[written, spoken], ...]`, kept to well-formed
+    pairs, longest written form first so "v0.9.1" goes before "0.9"."""
+    pairs = []
+    for item in raw if isinstance(raw, list) else []:
+        if isinstance(item, (list, tuple)) and len(item) == 2 and all(isinstance(x, str) for x in item):
+            written, spoken = item[0].strip(), item[1].strip()
+            if written and len(written) <= 200 and len(spoken) <= 400:
+                pairs.append((written, spoken))
+    return sorted(pairs, key=lambda p: -len(p[0]))
+
+
+def spoken(sentence: str, pairs: list[tuple[str, str]]) -> str:
+    """The sentence as the voice says it: each written form swapped for its
+    spoken one, in one pass, so a swap's words are never swapped again. The
+    sentence itself is left as it is, for the highlight to find."""
+    if not pairs:
+        return sentence
+    table = dict(pairs)
+    pattern = re.compile("|".join(re.escape(w) for w, _ in pairs))
+    return pattern.sub(lambda m: table[m.group(0)], sentence)
+
+
 def split_sentences(text: str) -> list[str]:
     parts = []
     for para in re.split(r"\n\s*\n|\n", text):
@@ -253,6 +276,8 @@ class Job:
         self.volume = float(req.get("volume") if req.get("volume") is not None else 1.0)
         self.duck = float(req.get("duck") if req.get("duck") is not None else 1.0)  # other apps' level; 1 = off
         self.sentences = split_sentences(speakable(req.get("text") or "", bool(req.get("readCode"))))
+        # Written forms to say otherwise (numbers, symbols), from the mod's rewrite for speech.
+        self.say = say_pairs(req.get("say"))
         self.durations: dict[int, float] = {}  # 1x seconds per sentence, once synthesized
         self.cache: dict[tuple, bytes] = {}
 
@@ -288,15 +313,16 @@ class Player:
         if key not in job.cache:
             if not voice:
                 raise RuntimeError("no voice installed for this language; see /read-along doctor")
+            text = spoken(sentence, job.say)
             try:
-                audio = self.engines.synth(voice, sentence)
+                audio = self.engines.synth(voice, text)
             except Exception as err:  # once with the best other voice, then give up on the sentence
                 fallback = self.engines.auto(group)
                 if not fallback or fallback == voice:
                     raise
                 log(f"{voice} failed, using {fallback}:", err)
                 self.error = f"{voice} failed ({err}); using {fallback}."
-                audio = self.engines.synth(fallback, sentence)
+                audio = self.engines.synth(fallback, text)
             job.cache[key] = audio
             seconds = len(audio) / 2 / RATE
             job.durations[i] = seconds

@@ -35,6 +35,8 @@ export type ReadAlongSettings = {
   autoReadMine: boolean
   /** With auto-read `all`, also read the thinking blocks (shown as updates in some setups). */
   readThinking: boolean
+  /** Ask Claude Haiku how to say a message's numbers and symbols before reading it. */
+  rewriteForSpeech: boolean
 }
 
 /** Which message is being read, and the sentence heard now. */

@@ -2,7 +2,7 @@ import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 
-import { factoryDefaults, formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceLabel, voiceName, voiceRows } from '../hooks/register'
+import { factoryDefaults, formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseSayPairs, parseVoices, splitAfter, voiceLabel, voiceName, voiceRows } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -388,4 +388,51 @@ test('saved voices for a language keep it shown in the settings', { options: { v
   const drawn = await paneSetup($, on)
   expect(drawn).toContain('Japanese voice')
   expect(drawn).toContain('Hebrew voice')
+})
+
+test("Haiku's answer becomes pairs of written and spoken forms found in the text", async () => {
+  const text = 'Update to `v0.9.1`: it is 2.5x faster.'
+  const answer = 'Here: [["`v0.9.1`", "version zero point nine point one"], ["2.5x", "two and a half times"], ["missing", "x"], ["bad"]]'
+  expect(parseSayPairs(answer, text)).toEqual([
+    ['v0.9.1', 'version zero point nine point one'],
+    ['2.5x', 'two and a half times'],
+  ])
+  expect(parseSayPairs('no JSON here', text)).toEqual([])
+})
+
+test('with words on, the read carries the spoken forms Haiku gave', { options: { rewriteForSpeech: true } }, async ($, on) => {
+  mock.env(on, { USER: 'tester' })
+  const sent: unknown[] = []
+  let asked = 0
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('http.fetch', async ($, e) => {
+    if (e.url.endsWith('/speak')) sent.push(JSON.parse(String(e.init?.body ?? '{}')))
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ state: 'idle', queue: 0 }) } }
+  })
+  on('model.complete', async ($, e) => {
+    asked++
+    expect(e.model).toBe('haiku')
+    return { value: { isAnswered: true, text: '[["v0.9.1", "version zero point nine point one"]]', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }
+  })
+  on('session.start', async ($, e) => ({ cwd: e.cwd }))
+  on('command.register', async ($, e) => ({ value: { command: e.name } }))
+  on('ui.status', async () => ({ value: undefined }))
+  const toasts: string[] = []
+  on('ui.toast', async ($, e) => {
+    toasts.push(String(e.text))
+    return { value: undefined }
+  })
+  let last = 'Plain words only.'
+  on('session.messages', async () => ({ value: [{ role: 'assistant' as const, text: last, toolUses: [] }] }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'Pane', props: { title: 'Read-along', isFocused: true, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} }, requestId: 'read-along' })
+  await ui.press({ key: 'read-last' })
+  expect(asked).toBe(0) // no numbers or symbols: Haiku isn't asked
+  expect((sent[0] as { say: unknown[] }).say).toEqual([])
+  last = 'Released v0.9.1 today.'
+  await ui.press({ key: 'read-last' })
+  await ui.press({ key: 'read-last' })
+  expect(toasts).toEqual([])
+  expect(asked).toBe(1) // asked once per message
+  expect((sent[2] as { say: unknown[] }).say).toEqual([['v0.9.1', 'version zero point nine point one']])
 })

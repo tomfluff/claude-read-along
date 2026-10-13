@@ -12,6 +12,12 @@
   agreed may be cloned. `auto` never picks Pocket TTS voices.
 - `setup.py kokoro --torch` gets PyTorch's CPU build on Linux without an
   NVIDIA GPU again; it was taking the CUDA build from PyPI.
+- Say numbers and symbols as words, optional and off by default: before a
+  message is read, Claude Haiku (the `haiku` alias, through your Claude Code
+  session) lists how to say its numbers, versions, symbols and abbreviations,
+  and the voice says those while the screen and the highlight keep the text
+  as written. With it on, each message read is sent once to Haiku; messages
+  with no digits or symbols aren't. Settings, or `/read-along words on|off`.
 - Reset: "reset…" in the settings and `/read-along reset` put this session's
   choices back to your saved defaults; `/read-along reset defaults` puts the
   saved settings back to the plugin's own. Both ask first.
