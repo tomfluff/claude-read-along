@@ -67,7 +67,7 @@ they run the command themselves (`! <command>` at the prompt).
   Kyutai's model: 27 more voices (`pocket:alba`, `pocket:marius`, …) in the
   main language when it's English, French, German, Italian, Portuguese,
   Spanish or Dutch, and voices of the person's own, cloned from a recording.
-  About 1 GB (PyTorch for the CPU), about 3x real time on 4 threads. `auto`
+  About 1.3 GB (PyTorch for the CPU, and the model), about 3x real time on 4 threads. `auto`
   never picks it; the person chooses its voices.
 
   ```bash

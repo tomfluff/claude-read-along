@@ -80,7 +80,7 @@ plays them in place, with their text.
 | macOS voices | macOS | good (Enhanced and Premium voices are better) | built in |
 | Windows voices | WSL | good with the newer "natural" voices | built in |
 | eSpeak NG | Linux, WSL | robotic, but about 100 languages | `sudo apt install espeak-ng` |
-| Pocket TTS (optional) | everywhere | natural, neural; 27 voices, and your own | `/read-along setup` (about 1 GB, CPU is fine) |
+| Pocket TTS (optional) | everywhere | natural, neural; 27 voices, and your own | `/read-along setup` (about 1.3 GB, CPU is fine) |
 
 Other languages use the system voices or eSpeak NG
 ([its languages](https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md)).
@@ -107,7 +107,8 @@ yourself, in the settings or with `/read-along voice pocket:alba`.
 
 Install it with `/read-along setup` (Claude asks whether you want it), or
 yourself with `python3 <plugin folder>/bin/setup.py pocket`. It goes into a
-Python of its own in the data folder, with PyTorch for the CPU, about 1 GB.
+Python of its own in the data folder, with PyTorch for the CPU: about 1.3 GB
+with its English model.
 Its model and built-in voices download from Hugging Face the first time each
 is used. Already have Pocket TTS? Point read-along at its Python instead:
 `setup.py pocket --python /path/to/python`.

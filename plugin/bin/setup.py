@@ -16,7 +16,7 @@ already have. Standard library only; run it with any Python 3.9+.
     setup.py pocket [--python PATH] [--voices FOLDER] [--threads N]
         Optional: Pocket TTS (kyutai-labs/pocket-tts), 27 more voices and
         voices of your own. Installs it into its own Python in the data
-        folder (PyTorch on the CPU, about 1 GB), or with --python uses a
+        folder (PyTorch on the CPU; about 1.3 GB with its model), or with --python uses a
         Python that already has it. Your voices go in FOLDER (default: the
         data folder's `voices`), one file each: a recording, or a
         `.safetensors` voice state from `pocket-tts export-voice`.
@@ -109,6 +109,13 @@ def pip_install(python: str, packages: list[str], extra: list[str] | None = None
         run([python, "-m", "pip", "install", *(extra or []), *packages])
 
 
+def install_cpu_torch(python: str):
+    """PyTorch's CPU build, a fraction of the size of the CUDA one. From the
+    PyTorch index alone: with PyPI as an extra index, uv took the CUDA build
+    from PyPI (5.5 GB), as it asks the extra index first."""
+    pip_install(python, ["torch"], ["--index-url", "https://download.pytorch.org/whl/cpu"])
+
+
 def download_model():
     models = os.path.join(data_dir(), "models")
     os.makedirs(models, exist_ok=True)
@@ -154,10 +161,8 @@ def setup_kokoro(japanese: bool, torch: bool):
     python = make_venv(venv)
     if torch:
         # Linux wheels from PyPI carry CUDA; without an NVIDIA GPU the CPU build is a fraction of the size.
-        extra = []
         if PLATFORM in ("linux", "wsl") and not shutil.which("nvidia-smi"):
-            extra = ["--index-url", "https://download.pytorch.org/whl/cpu", "--extra-index-url", "https://pypi.org/simple"]
-        pip_install(python, ["torch"], extra)
+            install_cpu_torch(python)
         pip_install(python, TORCH_PACKAGES)
     else:
         pip_install(python, ONNX_PACKAGES)
@@ -198,11 +203,9 @@ def setup_pocket(python: str | None, folder: str | None, threads: int | None):
         venv = os.path.join(data_dir(), "pocket")
         say(f"Installing Pocket TTS into {venv}")
         made = make_venv(venv)
-        extra = []
-        if PLATFORM in ("linux", "wsl") and not shutil.which("nvidia-smi"):
-            # The CPU build of PyTorch, a fraction of the size of the CUDA one.
-            extra = ["--index-url", "https://download.pytorch.org/whl/cpu", "--extra-index-url", "https://pypi.org/simple"]
-        pip_install(made, ["torch"], extra)
+        # Pocket TTS runs on the CPU, so PyTorch's CPU build even where there is a GPU.
+        if PLATFORM in ("linux", "wsl"):
+            install_cpu_torch(made)
         pip_install(made, [POCKET_PACKAGE])
     folder = os.path.abspath(os.path.expanduser(folder)) if folder else None
     os.makedirs(folder or os.path.join(data_dir(), "voices"), exist_ok=True)

@@ -4,12 +4,14 @@
 
 - Pocket TTS, optional: Kyutai's model adds 27 voices and voices of your own,
   cloned from a short recording. `/read-along setup` offers it, or
-  `setup.py pocket` installs it (about 1 GB, CPU), or points at an existing
+  `setup.py pocket` installs it (about 1.3 GB, CPU), or points at an existing
   install with `--python`. It reads the main language when it has a model for
   it (English, French, German, Italian, Portuguese, Spanish, Dutch). Your
   voices are files in the data folder's `voices` folder; cloning needs a
   Hugging Face sign-in to Kyutai's gated model, and only voices whose owner
   agreed may be cloned. `auto` never picks Pocket TTS voices.
+- `setup.py kokoro --torch` gets PyTorch's CPU build on Linux without an
+  NVIDIA GPU again; it was taking the CUDA build from PyPI.
 - The settings list the voices in rows by engine, your own voices first, and
   ask the service for them each time, so newly installed voices show up.
 
