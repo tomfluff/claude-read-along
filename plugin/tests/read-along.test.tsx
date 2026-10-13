@@ -1,5 +1,6 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
+import type { TestBody } from 'claude-code/testing'
 
 import { factoryDefaults, formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceLabel, voiceName, voiceRows } from '../hooks/register'
 
@@ -359,7 +360,7 @@ test("the plugin's own defaults come from its manifest's userConfig", async () =
   expect(factoryDefaults('{}')).toEqual([])
 })
 
-const paneSetup = async ($: Parameters<Parameters<typeof test>[2]>[0], on: Parameters<Parameters<typeof test>[2]>[1]) => {
+const paneSetup = async ($: Parameters<TestBody>[0], on: Parameters<TestBody>[1]) => {
   mock.env(on, { USER: 'tester' })
   on('process.run', async () => ({ value: { exitCode: 0, stdout: 'ok', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('http.fetch', async () => ({ value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ state: 'idle', queue: 0 }) } }))
@@ -367,7 +368,7 @@ const paneSetup = async ($: Parameters<Parameters<typeof test>[2]>[0], on: Param
   on('command.register', async ($, e) => ({ value: { command: e.name } }))
   on('ui.status', async () => ({ value: undefined }))
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
-  const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'Pane', props: {}, requestId: 'read-along' })
+  const ui = await $.ui.mount({ plugin: 'read-along', surface: 'terminal', component: 'Pane', props: { title: 'Read-along', isFocused: true, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} }, requestId: 'read-along' })
   return JSON.stringify(await ui.drawn())
 }
 
