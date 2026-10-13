@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Set up or troubleshoot the read-along plugin's voices on this machine (install Kokoro, an audio player, or system voices; point it at an existing Kokoro). Use when the person asks to set up read-along, when /read-along doctor shows something missing, or when read-along is silent or says no voice is installed.
+description: Set up or troubleshoot the read-along plugin's voices on this machine (install Kokoro, Pocket TTS, an audio player, or system voices; point it at an existing Kokoro or Pocket TTS; a voice of the person's own). Use when the person asks to set up read-along, when /read-along doctor shows something missing, or when read-along is silent or says no voice is installed.
 ---
 
 # Setting up read-along
@@ -8,8 +8,10 @@ description: Set up or troubleshoot the read-along plugin's voices on this machi
 read-along speaks through a small local service (`bin/speakd.py`) that uses
 whatever voices the machine has. It works with no setup when there is an
 audio player and at least one engine; Kokoro is optional and sounds much
-better. Everything runs locally: the only downloads are the Python packages
-(from PyPI) and Kokoro's model (from GitHub, checked against its SHA-256).
+better; Pocket TTS is a further option. Everything runs locally: the only
+downloads are the Python packages (from PyPI), Kokoro's model (from GitHub,
+checked against its SHA-256) and, with Pocket TTS, its model and built-in
+voices (from Hugging Face, on first use).
 
 The plugin's folder is the one that holds this skill, two levels up
 (`<plugin>/skills/setup/SKILL.md`). Its scripts are in `<plugin>/bin/`.
@@ -61,12 +63,29 @@ they run the command themselves (`! <command>` at the prompt).
   Content → System Voice → Manage Voices; the Enhanced and Premium voices are
   free downloads. Windows (from WSL): Settings → Time & language → Speech →
   Add voices.
-- **A voice of their own** (only if the person asks): Pocket TTS clones a
-  voice from a recording. It needs a Python with the `pocket_tts` package
-  (it brings PyTorch; install it apart from read-along) and a folder with one
-  file per voice, a recording or a `.safetensors` voice state. Then
-  `python3 -I <plugin>/bin/setup.py pocket /path/to/python /path/to/voices`,
-  which lists the voices and times one sentence. Voices are `pocket:<file name>`.
+- **Pocket TTS** (optional; offer it after Kokoro, as a yes-or-no question).
+  Kyutai's model: 27 more voices (`pocket:alba`, `pocket:marius`, …) in the
+  main language when it's English, French, German, Italian, Portuguese,
+  Spanish or Dutch, and voices of the person's own, cloned from a recording.
+  About 1 GB (PyTorch for the CPU), about 3x real time on 4 threads. `auto`
+  never picks it; the person chooses its voices.
+
+  ```bash
+  python3 -I <plugin>/bin/setup.py pocket                          # installs it in the data folder
+  python3 -I <plugin>/bin/setup.py pocket --python /path/to/python # a Python that already has pocket_tts
+  ```
+
+  Setup tries a built-in voice and says whether cloning works. Run it in the
+  background too. For a voice of their own:
+  - The recording goes in the data folder's `voices` folder (setup prints
+    it), one file per voice, 10 to 30 seconds of clear speech; `me.wav`
+    becomes `pocket:me` after `/read-along restart`.
+  - Cloning needs Hugging Face access to Kyutai's gated model: a free
+    account, the terms accepted at https://huggingface.co/kyutai/pocket-tts,
+    and `hf auth login` on the machine. The person does those steps; never
+    ask for or handle their token. Built-in voices work without it.
+  - Say plainly: clone only their own voice or one whose owner agreed.
+    Kyutai's terms forbid cloning anyone without explicit consent.
 - **Text in Latin script isn't English** (a Spanish or French speaker):
   `python3 -I <plugin>/bin/setup.py language es`.
 
@@ -92,7 +111,7 @@ auto-read. `/read-along voices` lists every installed voice by name. The
 `voices` setting in `/config` keeps the choices: `main=kokoro:af_heart,
 mac:Samantha; ja=kokoro:jf_alpha` (the first of each list is used, and the
 voice button steps through the main list). `auto` picks the best voice
-installed for each language.
+installed for each language; Pocket TTS voices are only ever chosen by hand.
 
 ## What not to do
 

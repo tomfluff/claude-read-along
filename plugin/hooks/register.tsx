@@ -243,12 +243,15 @@ async function loadInfo($: $) {
   }
 }
 
-/** Every installed voice, for the settings pane's lists. */
+/**
+ * Every installed voice, for the settings pane's lists: asked again each time
+ * a list opens, since voices come and go (an engine set up, a Pocket TTS
+ * voice file added), and written only when they changed.
+ */
 async function loadVoices($: $) {
-  if ((await read($, installed)) !== null) return
   try {
     const { voices } = await call<{ voices: ReadAlongVoice[] }>($, '/voices')
-    await update($, installed, () => voices)
+    if (JSON.stringify(await read($, installed)) !== JSON.stringify(voices)) await update($, installed, () => voices)
   } catch {
     // the pane says it couldn't list them
   }
@@ -435,7 +438,7 @@ async function restart($: $) {
 }
 
 const SETUP_PROMPT =
-  "Set up read-along for me: check this machine with /read-along doctor, then help me install the Kokoro voices with the plugin's setup skill."
+  "Set up read-along for me: check this machine with /read-along doctor, then help me install the voices with the plugin's setup skill."
 
 // ------------------------------------------------------------ text helpers
 
@@ -467,6 +470,22 @@ export const voiceName = (voice = '', isLong = false): string => {
   }
   const short = engine === 'win' ? name.replace(/^Microsoft /, '').replace(/ (Native|Desktop|Online)$/, '') : name
   return isLong ? `${short} (${ENGINE_NAMES[engine]})` : short
+}
+
+/** A voice's name in a list already headed by its engine: heart (US), Aria, alba. */
+export const voiceLabel = (voice: string): string => {
+  const engine = ENGINE_NAMES[voice.split(':')[0] ?? ''] ?? ''
+  return voiceName(voice, true).replace(` (${engine})`, '').replace(`(${engine} `, '(')
+}
+
+/** Voices in rows, one per engine, the person's own Pocket TTS voices first. */
+export const voiceRows = (voices: ReadAlongVoice[]): [string, ReadAlongVoice[]][] => {
+  const rows = new Map<string, ReadAlongVoice[]>()
+  for (const v of [...voices.filter(v => v.own), ...voices.filter(v => !v.own)]) {
+    const label = v.own ? 'Your voices' : (ENGINE_NAMES[v.engine] ?? v.engine)
+    rows.set(label, [...(rows.get(label) ?? []), v])
+  }
+  return [...rows]
 }
 
 const hash = (text: string) => {
@@ -1064,7 +1083,7 @@ const HELP = [
   '/read-along auto replies off|final|all, auto mine on|off, auto thinking on|off',
   "/read-along save            make this session's choices the defaults",
   '/read-along doctor          what works on this machine, and what to install',
-  '/read-along setup           ask Claude to install the Kokoro voices',
+  '/read-along setup           ask Claude to install the voices',
   '/read-along restart         restart the speech service',
 ].join('\n')
 
@@ -1319,15 +1338,14 @@ export const register: Register = (on, options) => {
                 ))}
                 <Button key={`${group}-more`} label={open === group ? 'fewer' : 'more…'} onPress={() => toggle(group)} />
               </Box>
-              {more.length
-                ? [
-                    <Box key={`${group}-list`} columnGap={1} flexWrap="wrap">
-                      {more.map(v => (
-                        <Button key={`${group}-all-${v.id}`} label={voiceName(v.id, true)} onPress={() => setVoice($, group, v.id)} />
-                      ))}
-                    </Box>,
-                  ]
-                : []}
+              {voiceRows(more).map(([label, list]) => (
+                <Box key={`${group}-list-${label}`} columnGap={1} flexWrap="wrap">
+                  <Text dimColor>{label}:</Text>
+                  {list.map(v => (
+                    <Button key={`${group}-all-${v.id}`} label={voiceLabel(v.id)} onPress={() => setVoice($, group, v.id)} />
+                  ))}
+                </Box>
+              ))}
             </Box>
           )
         })}

@@ -2,10 +2,16 @@
 
 ## Unreleased
 
-- A voice of your own: read-along can read with Pocket TTS, which clones a
-  voice from a short recording. Point it at a Python with Pocket TTS and a
-  folder of voices with `setup.py pocket`; each file is a voice
-  (`pocket:<name>`), chosen like any other. `auto` never picks them.
+- Pocket TTS, optional: Kyutai's model adds 27 voices and voices of your own,
+  cloned from a short recording. `/read-along setup` offers it, or
+  `setup.py pocket` installs it (about 1 GB, CPU), or points at an existing
+  install with `--python`. It reads the main language when it has a model for
+  it (English, French, German, Italian, Portuguese, Spanish, Dutch). Your
+  voices are files in the data folder's `voices` folder; cloning needs a
+  Hugging Face sign-in to Kyutai's gated model, and only voices whose owner
+  agreed may be cloned. `auto` never picks Pocket TTS voices.
+- The settings list the voices in rows by engine, your own voices first, and
+  ask the service for them each time, so newly installed voices show up.
 
 ## 0.9.2 (2026-10-13)
 

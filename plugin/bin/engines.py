@@ -7,7 +7,7 @@ named `<engine>:<voice>`:
     win:Microsoft Aria           the Windows (SAPI) voices, from WSL
     mac:Samantha                 the macOS voices (`say`)
     espeak:en-us                 eSpeak NG, robotic but everywhere on Linux
-    pocket:me                    Pocket TTS, a voice of your own (me.safetensors)
+    pocket:alba, pocket:me       Pocket TTS: its own voices, and yours (me.wav)
 
 and `auto` picks the best voice installed for the text's language. Names from
 before engines were named still work: a bare Kokoro name (af_heart) is Kokoro,
@@ -674,19 +674,29 @@ class Espeak(Engine):
                 return wav_to_pcm(f.read())
 
 
-# -- Pocket TTS (a voice of your own)
+# -- Pocket TTS (more voices, and a voice of your own)
 
-POCKET_LANGS = {"english": "en", "french": "fr", "german": "de", "portuguese": "pt", "italian": "it", "spanish": "es"}
+# Pocket TTS's languages, each a model of its own, by language code.
+POCKET_LANGS = {"en": "english", "fr": "french", "de": "german", "it": "italian", "pt": "portuguese",
+                "es": "spanish", "nl": "dutch"}
+# The voices every Pocket TTS language model has built in (kyutai/tts-voices).
+POCKET_BUILTIN = (
+    "alba anna azelma bill_boerst caro_davy charles cosette daan eponine estelle eve fantine george giovanni "
+    "jane javert jean juergen lola marius mary michael paul peter_yearsley rafael stuart_bell vera"
+).split()
 POCKET_FILES = (".safetensors", ".wav", ".mp3", ".flac", ".ogg")
 
 
 class Pocket(Engine):
-    """Kyutai's Pocket TTS, for voices cloned from a recording: each file in
-    the `pocketVoices` folder is a voice, a `.safetensors` voice state (made by
-    Pocket TTS's `export-voice`) or a recording. Pocket TTS and PyTorch stay in
-    their own Python (`pocketPython`), run as a worker (bin/pocket_worker.py).
-    About 3x faster than real time on 4 CPU threads; `auto` never picks it, so
-    it is used only when chosen."""
+    """Kyutai's Pocket TTS: 27 built-in voices, and voices of your own, each a
+    file in the `pocketVoices` folder, a `.safetensors` voice state (made by
+    `pocket-tts export-voice`, loads at once) or a recording (cloned on first
+    use; needs Hugging Face access to kyutai/pocket-tts). Pocket TTS and
+    PyTorch stay in their own Python (`pocketPython`; bin/setup.py pocket
+    installs one in the data folder), run as a worker (bin/pocket_worker.py).
+    It reads the main language when Pocket TTS has it (English, French,
+    German, Italian, Portuguese, Spanish, Dutch), else English. About 3x
+    faster than real time on 4 CPU threads; `auto` never picks it."""
 
     name = "pocket"
     label = "Pocket TTS"
@@ -694,73 +704,89 @@ class Pocket(Engine):
     def __init__(self):
         self.proc = None
         self.rate = RATE
+        self.cloning = None
         self.lock = threading.Lock()
 
     @staticmethod
-    def _config():
+    def python() -> str | None:
         cfg = read_config()
-        return cfg.get("pocketPython"), cfg.get("pocketVoices"), cfg.get("pocketLanguage") or "english"
+        if cfg.get("pocket") is False:  # turned off with `setup.py pocket-off`
+            return None
+        if cfg.get("pocketPython"):
+            return cfg["pocketPython"]
+        venv = os.path.join(data_dir(), "pocket", "bin", "python")
+        return venv if os.path.exists(venv) else None
+
+    @staticmethod
+    def folder() -> str:
+        return read_config().get("pocketVoices") or os.path.join(data_dir(), "voices")
+
+    @staticmethod
+    def language() -> tuple[str, str]:
+        """(code, Pocket TTS's name for it): the main language's, else English."""
+        code = main_language()
+        return (code, POCKET_LANGS[code]) if code in POCKET_LANGS else ("en", "english")
 
     def available(self):
-        python, folder, _ = self._config()
+        python = self.python()
         if not python:
-            return False, "not set up (optional: a voice of your own; see bin/setup.py pocket)"
+            return False, "not installed (optional: 27 more voices and a voice of your own)"
         if not os.path.exists(python):
             return False, f"its Python is gone: {python}"
-        if not folder or not os.path.isdir(folder):
-            return False, f"its voice folder is missing: {folder}"
-        if not self._files():
-            return False, f"no voice files in {folder}"
         return True, ""
 
-    def _files(self) -> dict[str, str]:
-        """Voice name -> file; a `.safetensors` wins over a recording of the same name."""
-        _, folder, _ = self._config()
+    def own(self) -> dict[str, str]:
+        """Your voices: name -> file; a `.safetensors` wins over a recording of the same name."""
         try:
-            names = sorted(os.listdir(folder or ""))
+            names = sorted(os.listdir(self.folder()))
         except OSError:
             return {}
         found: dict[str, str] = {}
         for f in names:
             stem, ext = os.path.splitext(f)
             if ext.lower() in POCKET_FILES and (stem not in found or ext.lower() == ".safetensors"):
-                found[stem] = os.path.join(folder, f)
+                found[stem] = os.path.join(self.folder(), f)
         return found
 
     def voices(self):
-        _, _, language = self._config()
-        lang = POCKET_LANGS.get(language.split("_")[0], "en")
-        return [{"id": f"pocket:{n}", "name": n, "lang": lang} for n in self._files()]
+        if not self.available()[0]:
+            return []
+        code, _ = self.language()
+        own = self.own()
+        return ([{"id": f"pocket:{n}", "name": n, "lang": code, "own": True} for n in own]
+                + [{"id": f"pocket:{n}", "name": n, "lang": code} for n in POCKET_BUILTIN if n not in own])
 
     def _start(self):
         if self.proc and self.proc.poll() is None:
             return
-        python, _, language = self._config()
         threads = int(read_config().get("pocketThreads") or min(4, os.cpu_count() or 4))
         worker = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pocket_worker.py")
         t = time.time()
         self.proc = subprocess.Popen(
-            [python, "-I", worker, "--threads", str(threads), "--language", language],
+            [self.python(), "-I", worker, "--threads", str(threads), "--language", self.language()[1]],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1,
         )
-        first = self.proc.stdout.readline().strip()
-        if not first.startswith("READY "):
+        first = self.proc.stdout.readline().split()
+        if first[:1] != ["READY"]:
             self.proc.kill()
-            raise RuntimeError(f"Pocket TTS worker didn't start: {first!r}")
-        self.rate = int(first[6:])
-        log(f"pocket tts loaded in {time.time() - t:.1f}s ({threads} threads)")
+            raise RuntimeError("Pocket TTS didn't start; see the service log")
+        self.rate = int(first[1])
+        self.cloning = first[2:3] != ["0"]
+        log(f"pocket tts loaded in {time.time() - t:.1f}s ({threads} threads, "
+            f"{'clones recordings' if self.cloning else 'built-in voices and voice states only'})")
 
     def _ask(self, req: dict) -> str:
-        path = self._files().get(req["voice"])
-        if not path:
-            raise RuntimeError(f"no Pocket TTS voice named {req['voice']}")
+        name = req["voice"]
+        voice = self.own().get(name) or (name if name in POCKET_BUILTIN else None)
+        if not voice:
+            raise RuntimeError(f"no Pocket TTS voice named {name}")
         with self.lock:
             self._start()
-            self.proc.stdin.write(json.dumps(dict(req, voice=path), ensure_ascii=False) + "\n")
+            self.proc.stdin.write(json.dumps(dict(req, voice=voice, language=self.language()[1]), ensure_ascii=False) + "\n")
             self.proc.stdin.flush()
             line = self.proc.stdout.readline().strip()
-        if line.startswith("ERR ") or not line.startswith("OK"):
-            raise RuntimeError(line[4:] or "Pocket TTS worker stopped")
+        if not line.startswith("OK"):
+            raise RuntimeError(line[4:] or "Pocket TTS stopped; see the service log")
         return line[3:]
 
     def warm(self, voice):

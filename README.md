@@ -40,7 +40,7 @@ Claude explains something. It is not a screen reader and doesn't replace one.
 
 ## Hear it
 
-Kokoro voices, made with read-along's own setup on a laptop CPU. Each link
+Kokoro and Pocket TTS voices, made with read-along's own setup on a laptop CPU. Each link
 opens a short MP3; [the web page](https://sechayk.com/claude-read-along/#hear-it)
 plays them in place, with their text.
 
@@ -52,6 +52,9 @@ plays them in place, with their text.
 | `kokoro:jf_alpha` | Japanese | [listen](docs/samples/ja-alpha.mp3) |
 | `kokoro:ef_dora` | Spanish | [listen](docs/samples/es-dora.mp3) |
 | `kokoro:ff_siwis` | French | [listen](docs/samples/fr-siwis.mp3) |
+| `pocket:alba` | English (Pocket TTS) | [listen](docs/samples/en-pocket-alba.mp3) |
+| `pocket:marius` | English (Pocket TTS) | [listen](docs/samples/en-pocket-marius.mp3) |
+| `pocket:juergen` | German (Pocket TTS) | [listen](docs/samples/de-pocket-juergen.mp3) |
 
 ## What you need
 
@@ -77,12 +80,64 @@ plays them in place, with their text.
 | macOS voices | macOS | good (Enhanced and Premium voices are better) | built in |
 | Windows voices | WSL | good with the newer "natural" voices | built in |
 | eSpeak NG | Linux, WSL | robotic, but about 100 languages | `sudo apt install espeak-ng` |
-| Pocket TTS (optional) | everywhere | your own voice, cloned from a recording | see [A voice of your own](#a-voice-of-your-own) |
+| Pocket TTS (optional) | everywhere | natural, neural; 27 voices, and your own | `/read-along setup` (about 1 GB, CPU is fine) |
 
-Kokoro speaks English (US and UK), Japanese, Chinese, Spanish, French, Hindi,
-Italian and Portuguese ([its voices](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)).
 Other languages use the system voices or eSpeak NG
 ([its languages](https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md)).
+
+### Kokoro
+
+[Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), by hexgrad, is the
+default: an 82-million-parameter model that speaks English (US and UK),
+Japanese, Chinese, Spanish, French, Hindi, Italian and Portuguese
+([its voices](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)).
+Setup installs [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx),
+which runs on the CPU at about 3 times real time, and `auto` picks Kokoro
+whenever it has a voice for the language.
+
+### Pocket TTS
+
+[Pocket TTS](https://github.com/kyutai-labs/pocket-tts), by Kyutai, is
+optional. It adds 27 voices (`pocket:alba`, `pocket:marius`, …) and can
+speak in a voice of your own, cloned from a short recording. It reads the
+main language when it has a model for it (English, French, German, Italian,
+Portuguese, Spanish or Dutch), and English otherwise, at about 3 times real
+time on 4 CPU threads. `auto` never picks it, so you choose its voices
+yourself, in the settings or with `/read-along voice pocket:alba`.
+
+Install it with `/read-along setup` (Claude asks whether you want it), or
+yourself with `python3 <plugin folder>/bin/setup.py pocket`. It goes into a
+Python of its own in the data folder, with PyTorch for the CPU, about 1 GB.
+Its model and built-in voices download from Hugging Face the first time each
+is used. Already have Pocket TTS? Point read-along at its Python instead:
+`setup.py pocket --python /path/to/python`.
+
+**A voice of your own.** Put a recording in the voices folder
+(`~/.local/share/claude-read-along/voices`; on macOS, under
+`~/Library/Application Support/claude-read-along`), one file per voice, and
+run `/read-along restart`: `me.wav` becomes the voice `pocket:me`, listed
+under "Your voices" in the settings. About 10 to 30 seconds of clear speech
+works well. A `.safetensors` voice state made by `pocket-tts export-voice`
+works too, and loads at once. Use `setup.py pocket --voices FOLDER` to keep
+your voices somewhere else.
+
+Cloning a voice from a recording uses Kyutai's gated model:
+
+1. Make a free account at [Hugging Face](https://huggingface.co).
+2. Accept Kyutai's terms on [kyutai/pocket-tts](https://huggingface.co/kyutai/pocket-tts).
+3. Sign in on your machine: `hf auth login` (or set `HF_TOKEN`).
+
+Without that, Pocket TTS loads a model that can't clone: the built-in voices
+and saved voice states still work, and setup says what's missing.
+
+Clone only your own voice, or a voice whose owner has agreed. Kyutai's terms
+forbid cloning or impersonating anyone without their explicit consent, and
+passing generated speech off as a real recording
+([Prohibited use](https://github.com/kyutai-labs/pocket-tts#prohibited-use)).
+Your recordings are read only on your machine and never uploaded.
+
+`setup.py pocket-off` stops read-along using Pocket TTS; delete the data
+folder's `pocket` folder to free the space.
 
 ## Install
 
@@ -100,11 +155,13 @@ Next, check what your machine has:
 /read-along doctor
 ```
 
-To get the Kokoro voices, run `/read-along setup`. It puts a request in the
+To get the voices, run `/read-along setup`. It puts a request in the
 prompt box; press Enter and Claude walks you through it with the mod's
-setup skill, asking before it installs anything. To do it yourself instead,
-run `python3 <plugin folder>/bin/setup.py kokoro` (add `--japanese` for
-Japanese). Kokoro goes into its own folder,
+setup skill: Kokoro, and Pocket TTS if you want it too, asking before it
+installs anything. To do it yourself instead, run
+`python3 <plugin folder>/bin/setup.py kokoro` (add `--japanese` for
+Japanese), and optionally `python3 <plugin folder>/bin/setup.py pocket`.
+Both go into their own folder,
 `~/.local/share/claude-read-along` (on macOS,
 `~/Library/Application Support/claude-read-along`), and nowhere else.
 
@@ -167,7 +224,8 @@ A voice is written `engine:name`:
 - `mac:Samantha`, `mac:Ava (Premium)`: macOS
 - `win:Microsoft Aria`: Windows, from WSL
 - `espeak:en-us`, `espeak:he`: eSpeak NG
-- `pocket:me`: a voice of your own, through Pocket TTS (below)
+- `pocket:alba`, `pocket:me`: Pocket TTS, its own voices and yours
+  ([Pocket TTS](#pocket-tts))
 - `auto`: the best voice installed for the language
 
 The Voices setting gives each language group a list. Latin-script text is
@@ -182,33 +240,17 @@ main=kokoro:af_heart, kokoro:bf_emma, mac:Samantha; ja=kokoro:jf_alpha; he=mac:C
 If your Latin-script text isn't English, tell `auto` which language it is:
 `python3 <plugin folder>/bin/setup.py language es`.
 
-### A voice of your own
-
-[Pocket TTS](https://github.com/kyutai-labs/pocket-tts) clones a voice from a
-short recording, and read-along can read with it. It speaks English, French,
-German, Portuguese, Italian and Spanish, about 3 times faster than real time
-on 4 CPU threads. Install it in a Python of its own (it brings PyTorch), put
-your voices in a folder, one file each (a recording, or a `.safetensors` voice
-state from `pocket-tts export-voice`, which loads at once), and point
-read-along at both:
-
-```bash
-python3 <plugin folder>/bin/setup.py pocket /path/to/pocket-tts/python /path/to/voices
-```
-
-Each file is then a voice named after it: `me.safetensors` is `pocket:me`.
-`auto` never picks these voices; choose one with `/read-along voice pocket:me`,
-or put it in a Voices list. Your recordings stay where they are and are read
-only on your machine. `setup.py pocket off` removes them from read-along.
-
 ## Privacy
 
 The mod runs a small speech service on your machine. It is reached over a
 Unix socket that only your user can open, and it sends nothing over the
-network. The network is used only by setup: Python packages come from PyPI,
-and Kokoro's model comes from the
+network. The network is used only to get the voices: by setup, where Python
+packages come from PyPI and Kokoro's model from the
 [kokoro-onnx releases](https://github.com/thewh1teagle/kokoro-onnx/releases),
-checked against a pinned SHA-256.
+checked against a pinned SHA-256; and, if you install Pocket TTS, by Pocket
+TTS fetching its model and built-in voices from Hugging Face the first time
+each is used. What you read is never sent anywhere, and neither are your
+voice recordings.
 
 ## Troubleshooting
 
@@ -265,4 +307,7 @@ MIT licence; see [LICENSE](LICENSE). Read-along uses, without bundling:
 [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) (MIT),
 [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0, run as a
 separate program), optionally [Pocket TTS](https://github.com/kyutai-labs/pocket-tts)
-(MIT, run in its own Python), and FFmpeg or SoX for playback.
+by Kyutai (code MIT, model weights CC BY 4.0, run in its own Python; its
+built-in voices come from [kyutai/tts-voices](https://huggingface.co/kyutai/tts-voices),
+each under its own licence, some non-commercial), and FFmpeg or SoX for
+playback.

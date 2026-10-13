@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceName } from '../hooks/register'
+import { formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceLabel, voiceName, voiceRows } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -331,4 +331,17 @@ test('a nested list item being read leaves the deeper item under it indented', a
   expect(drawn).toContain('"paddingLeft":4')
   expect(drawn).toContain('- c stays deeper.')
   expect(drawn).toContain('"text":"- d"')
+})
+
+test('the settings list voices in rows by engine, your own Pocket TTS voices first', async () => {
+  expect(voiceLabel('kokoro:bf_emma')).toBe('emma (UK)')
+  expect(voiceLabel('pocket:alba')).toBe('alba')
+  expect(voiceLabel('win:Microsoft Zira Desktop')).toBe('Zira')
+  const v = (id: string, engine: string, own?: boolean) => ({ id, name: id, lang: 'en', engine, ...(own ? { own } : {}) })
+  const rows = voiceRows([v('kokoro:af_heart', 'kokoro'), v('pocket:alba', 'pocket'), v('pocket:me', 'pocket', true), v('kokoro:bf_emma', 'kokoro')])
+  expect(rows.map(([label, list]) => [label, list.map(x => x.id)])).toEqual([
+    ['Your voices', ['pocket:me']],
+    ['Kokoro', ['kokoro:af_heart', 'kokoro:bf_emma']],
+    ['Pocket TTS', ['pocket:alba']],
+  ])
 })

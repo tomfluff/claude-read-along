@@ -56,7 +56,8 @@ export type ReadAlongInfo = {
 }
 
 /** An installed voice. */
-export type ReadAlongVoice = { id: string; name: string; lang: string; engine: string }
+/** `own`: a Pocket TTS voice from the person's own folder. */
+export type ReadAlongVoice = { id: string; name: string; lang: string; engine: string; own?: boolean }
 
 declare module 'claude-code' {
   interface PluginState {

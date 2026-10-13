@@ -326,6 +326,7 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
   <p>Read-along uses whatever voices your machine has, and picks one for each sentence, so a reply that mixes languages is read in each of them.</p>
   <ul class="features">
     <li><strong>Kokoro</strong>, the natural voices: English (US and UK), Japanese, Chinese, Spanish, French, Hindi, Italian and Portuguese. See <a href="https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md">Kokoro's voices</a>.</li>
+    <li><strong>Pocket TTS</strong>, optional, by Kyutai: 27 more natural voices in English, French, German, Italian, Portuguese, Spanish or Dutch, and a voice of your own, cloned from a short recording of you. See <a href="https://github.com/tomfluff/claude-read-along#pocket-tts">how to set it up</a>.</li>
     <li><strong>The macOS voices</strong>: dozens of languages, with Enhanced and Premium voices as free downloads. See <a href="https://support.apple.com/guide/mac-help/change-the-voice-your-mac-uses-to-speak-text-mchlp2290/mac">Apple's guide</a>.</li>
     <li><strong>The Windows voices</strong>, from WSL: the languages added under Settings → Time &amp; language → Speech.</li>
     <li><strong>eSpeak NG</strong>: about 100 languages, robotic but on any Linux. See <a href="https://github.com/espeak-ng/espeak-ng/blob/master/docs/languages.md">its languages</a>.</li>
@@ -333,7 +334,7 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
   <p>Korean, Hebrew, Arabic, Russian, Greek, Thai and the rest are read with the system voices or eSpeak NG.</p>
 
   <h2 id="hear-it">Hear it</h2>
-  <p>More Kokoro voices, made with read-along's own setup on a laptop CPU, in other languages too. The sentence is highlighted while it plays.</p>
+  <p>More voices, Kokoro's and Pocket TTS's, made with read-along's own setup on a laptop CPU, in other languages too. The sentence is highlighted while it plays.</p>
   <ul class="samples">
     <li class="sample">
       <div class="head"><h3>English (US), Heart</h3><span class="voice">kokoro:af_heart</span></div>
@@ -368,6 +369,21 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
       <p lang="fr">Ce module lit à voix haute les réponses de Claude et surligne chaque phrase pendant la lecture.</p>
       <audio controls preload="none" src="samples/fr-siwis.mp3" aria-label="French, the Siwis voice"></audio>
     </li>
+    <li class="sample">
+      <div class="head"><h3>English, Alba (Pocket TTS)</h3><span class="voice">pocket:alba</span></div>
+      <p lang="en">Read Along reads Claude's replies aloud, and highlights each sentence as it goes, so you can follow with your eyes and ears together.</p>
+      <audio controls preload="none" src="samples/en-pocket-alba.mp3" aria-label="English, the Alba voice from Pocket TTS"></audio>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>English, Marius (Pocket TTS)</h3><span class="voice">pocket:marius</span></div>
+      <p lang="en">Read Along reads Claude's replies aloud, and highlights each sentence as it goes, so you can follow with your eyes and ears together.</p>
+      <audio controls preload="none" src="samples/en-pocket-marius.mp3" aria-label="English, the Marius voice from Pocket TTS"></audio>
+    </li>
+    <li class="sample">
+      <div class="head"><h3>German, Juergen (Pocket TTS)</h3><span class="voice">pocket:juergen</span></div>
+      <p lang="de">Read Along liest die Antworten von Claude vor und hebt jeden Satz hervor, damit du mit Augen und Ohren zugleich folgen kannst.</p>
+      <audio controls preload="none" src="samples/de-pocket-juergen.mp3" aria-label="German, the Juergen voice from Pocket TTS"></audio>
+    </li>
   </ul>
 
   <h2 id="needs">What you need</h2>
@@ -375,7 +391,7 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
     <li><strong>Claude Code 2.1.287 or later, in the terminal.</strong> Mods also draw in the JetBrains plugin and the desktop app's Code tab, but not in its WSL sessions or over Remote Control.</li>
     <li><strong>WSL, Linux or macOS.</strong> Native Windows isn't supported yet; use it through WSL. So far it's been used day to day on WSL; on Linux and macOS it passes its automated tests but hasn't been tried by hand yet, so <a href="https://github.com/tomfluff/claude-read-along/issues">reports are welcome</a>.</li>
     <li><strong>Python 3.9 or newer</strong> as <code>python3</code>, and an audio player: <code>ffplay</code> (comes with ffmpeg) or SoX's <code>play</code>.</li>
-    <li><strong>A voice engine.</strong> Kokoro sounds the most natural, and read-along can install it for you (about 1 GB; a CPU is fine). The macOS and Windows voices and eSpeak NG work too.</li>
+    <li><strong>A voice engine.</strong> Kokoro sounds the most natural, and read-along can install it for you (about 1 GB; a CPU is fine). The macOS and Windows voices and eSpeak NG work too, and Pocket TTS adds more voices and your own (another 1 GB, optional).</li>
   </ul>
 
   <h2 id="install">Install</h2>
@@ -392,7 +408,7 @@ footer { max-width: 46rem; margin: 0 auto; padding: 24px 16px 48px; border-top: 
 </main>
 
 <footer>
-  <p>Read-along is made by <a href="https://sechayk.com">Yotam Sechayk</a> and released under the MIT licence. It's an independent mod for Claude Code, not an Anthropic product. This page counts visits with Google Analytics; the mod itself sends nothing anywhere.</p>
+  <p>Read-along is made by <a href="https://sechayk.com">Yotam Sechayk</a> and released under the MIT licence. It's an independent mod for Claude Code, not an Anthropic product. Its voices come from <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro</a> by hexgrad and, optionally, <a href="https://github.com/kyutai-labs/pocket-tts">Pocket TTS</a> by Kyutai. This page counts visits with Google Analytics; the mod itself sends nothing anywhere.</p>
 </footer>
 
 <script>

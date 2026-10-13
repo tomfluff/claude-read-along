@@ -96,33 +96,48 @@ class Routing(unittest.TestCase):
         self.assertEqual(e.resolve("espeak:he", "he"), "espeak:he")
 
 
-    def test_pocket_voices_are_the_files_in_its_folder(self):
+    def test_pocket_voices_are_its_own_and_the_files_in_its_folder(self):
         import json
         import tempfile
 
         with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as folder:
-            old = os.environ.get("READ_ALONG_DATA")
-            os.environ["READ_ALONG_DATA"] = data
+            old = {k: os.environ.get(k) for k in ("READ_ALONG_DATA", "LANG", "LC_ALL", "LC_MESSAGES")}
+            os.environ.update(READ_ALONG_DATA=data, LANG="de_DE.UTF-8", LC_ALL="", LC_MESSAGES="")
+            config = os.path.join(data, "config.json")
             try:
                 pocket = engines.Pocket()
-                self.assertFalse(pocket.available()[0])  # not set up
+                self.assertFalse(pocket.available()[0])  # not installed
                 for f in ("me.wav", "me.safetensors", "calm.mp3", "notes.txt"):
                     open(os.path.join(folder, f), "w").close()
                 os.mkdir(os.path.join(folder, "samples"))
-                with open(os.path.join(data, "config.json"), "w") as f:
-                    json.dump({"pocketPython": sys.executable, "pocketVoices": folder, "pocketLanguage": "french"}, f)
+                with open(config, "w") as f:
+                    json.dump({"pocketPython": sys.executable, "pocketVoices": folder}, f)
                 self.assertEqual(pocket.available(), (True, ""))
-                self.assertEqual(pocket._files(), {"calm": os.path.join(folder, "calm.mp3"), "me": os.path.join(folder, "me.safetensors")})
-                self.assertEqual(pocket.voices(), [{"id": "pocket:calm", "name": "calm", "lang": "fr"},
-                                                   {"id": "pocket:me", "name": "me", "lang": "fr"}])
-                self.assertIsNone(pocket.best(["fr"]))  # never picked by `auto`
+                self.assertEqual(pocket.own(), {"calm": os.path.join(folder, "calm.mp3"), "me": os.path.join(folder, "me.safetensors")})
+                voices = pocket.voices()
+                self.assertEqual(voices[:3], [{"id": "pocket:calm", "name": "calm", "lang": "de", "own": True},
+                                              {"id": "pocket:me", "name": "me", "lang": "de", "own": True},
+                                              {"id": "pocket:alba", "name": "alba", "lang": "de"}])
+                self.assertEqual(len(voices), 2 + len(engines.POCKET_BUILTIN))
+                self.assertEqual(pocket.language(), ("de", "german"))  # the main language, from $LANG
+                self.assertIsNone(pocket.best(["de"]))  # never picked by `auto`
                 self.assertEqual(engines.Engines.split("pocket:me"), ("pocket", "me"))
+                # Installed by setup into the data folder; turned off by setup.py pocket-off.
+                os.makedirs(os.path.join(data, "pocket", "bin"))
+                open(os.path.join(data, "pocket", "bin", "python"), "w").close()
+                with open(config, "w") as f:
+                    json.dump({"mainLanguage": "ja"}, f)
+                self.assertEqual(pocket.python(), os.path.join(data, "pocket", "bin", "python"))
+                self.assertEqual(pocket.language(), ("en", "english"))  # no Japanese model: English
+                with open(config, "w") as f:
+                    json.dump({"pocket": False}, f)
+                self.assertFalse(pocket.available()[0])
             finally:
-                if old is None:
-                    os.environ.pop("READ_ALONG_DATA", None)
-                else:
-                    os.environ["READ_ALONG_DATA"] = old
-
+                for k, v in old.items():
+                    if v is None:
+                        os.environ.pop(k, None)
+                    else:
+                        os.environ[k] = v
 
 class Audio(unittest.TestCase):
     def test_resample_length_and_ends(self):
