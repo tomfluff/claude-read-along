@@ -13,6 +13,12 @@ already have. Standard library only; run it with any Python 3.9+.
         about 2 GB or more.
     setup.py use-python PATH
         Use a Python that already has `kokoro` or `kokoro-onnx` installed.
+    setup.py pocket PYTHON FOLDER [--language english] [--threads N]
+        Add voices of your own through Pocket TTS (kyutai-labs/pocket-tts):
+        PYTHON has the `pocket_tts` package, FOLDER holds the voices, one
+        file each: a `.safetensors` voice state (from `pocket-tts
+        export-voice`, quickest) or a short recording. `setup.py pocket off`
+        removes them.
     setup.py language CODE
         The language of text in Latin script, such as en, es or fr (default:
         from $LANG).
@@ -175,6 +181,41 @@ def use_python(path: str):
     say(f"read-along will use {path} (Kokoro {found}).")
 
 
+def setup_pocket(python: str, folder: str | None, language: str, threads: int | None):
+    if python == "off":
+        write_config(pocketPython=None, pocketVoices=None, pocketLanguage=None, pocketThreads=None)
+        say("Pocket TTS voices removed.")
+        return 0
+    python = os.path.abspath(os.path.expanduser(python))
+    probe = "import importlib.util as u; print('yes' if u.find_spec('pocket_tts') else '')"
+    if subprocess.run([python, "-I", "-c", probe], capture_output=True, text=True).stdout.strip() != "yes":
+        sys.exit(f"{python} doesn't have Pocket TTS (the pocket_tts package) installed.")
+    if not folder or not os.path.isdir(os.path.expanduser(folder)):
+        sys.exit(f"No voice folder at {folder}.")
+    folder = os.path.abspath(os.path.expanduser(folder))
+    write_config(pocketPython=python, pocketVoices=folder,
+                 pocketLanguage=None if language == "english" else language, pocketThreads=threads)
+    from engines import Pocket
+
+    engine = Pocket()
+    ok, why = engine.available()
+    if not ok:
+        sys.exit(f"Pocket TTS isn't usable: {why}")
+    names = [v["name"] for v in engine.voices()]
+    say(f"Voices: {', '.join('pocket:' + n for n in names)}")
+    say("Trying the first one (this loads the model):")
+    t = time.time()
+    pcm = engine.synth("Read-along is ready.", names[0])
+    took = time.time() - t
+    t = time.time()
+    pcm = engine.synth("This sentence is timed to see how fast the voice is made.", names[0])
+    speech = len(pcm) / 2 / 24000
+    say(f"  ready in {took:.1f}s; {speech:.1f}s of speech in {time.time() - t:.1f}s")
+    engine.close()
+    say("Choose one with /read-along voice pocket:" + names[0])
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -183,6 +224,11 @@ def main():
     k.add_argument("--torch", action="store_true")
     p = sub.add_parser("use-python")
     p.add_argument("path")
+    pk = sub.add_parser("pocket")
+    pk.add_argument("python")
+    pk.add_argument("folder", nargs="?")
+    pk.add_argument("--language", default="english")
+    pk.add_argument("--threads", type=int)
     lang = sub.add_parser("language")
     lang.add_argument("code")
     sub.add_parser("show")
@@ -192,6 +238,10 @@ def main():
     if a.cmd == "kokoro":
         code = setup_kokoro(a.japanese, a.torch)
         say(f"Done in {time.time() - t:.0f}s. Restart the speech service: /read-along restart")
+        sys.exit(code)
+    if a.cmd == "pocket":
+        code = setup_pocket(a.python, a.folder, a.language, a.threads)
+        say("Restart the speech service to list them: /read-along restart")
         sys.exit(code)
     if a.cmd == "use-python":
         use_python(a.path)

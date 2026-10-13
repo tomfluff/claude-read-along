@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A voice of your own: read-along can read with Pocket TTS, which clones a
+  voice from a short recording. Point it at a Python with Pocket TTS and a
+  folder of voices with `setup.py pocket`; each file is a voice
+  (`pocket:<name>`), chosen like any other. `auto` never picks them.
+
 ## 0.9.2 (2026-10-13)
 
 - While a nested list item is read, the items after it keep their indent;

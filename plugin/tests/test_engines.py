@@ -96,6 +96,34 @@ class Routing(unittest.TestCase):
         self.assertEqual(e.resolve("espeak:he", "he"), "espeak:he")
 
 
+    def test_pocket_voices_are_the_files_in_its_folder(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as folder:
+            old = os.environ.get("READ_ALONG_DATA")
+            os.environ["READ_ALONG_DATA"] = data
+            try:
+                pocket = engines.Pocket()
+                self.assertFalse(pocket.available()[0])  # not set up
+                for f in ("me.wav", "me.safetensors", "calm.mp3", "notes.txt"):
+                    open(os.path.join(folder, f), "w").close()
+                os.mkdir(os.path.join(folder, "samples"))
+                with open(os.path.join(data, "config.json"), "w") as f:
+                    json.dump({"pocketPython": sys.executable, "pocketVoices": folder, "pocketLanguage": "french"}, f)
+                self.assertEqual(pocket.available(), (True, ""))
+                self.assertEqual(pocket._files(), {"calm": os.path.join(folder, "calm.mp3"), "me": os.path.join(folder, "me.safetensors")})
+                self.assertEqual(pocket.voices(), [{"id": "pocket:calm", "name": "calm", "lang": "fr"},
+                                                   {"id": "pocket:me", "name": "me", "lang": "fr"}])
+                self.assertIsNone(pocket.best(["fr"]))  # never picked by `auto`
+                self.assertEqual(engines.Engines.split("pocket:me"), ("pocket", "me"))
+            finally:
+                if old is None:
+                    os.environ.pop("READ_ALONG_DATA", None)
+                else:
+                    os.environ["READ_ALONG_DATA"] = old
+
+
 class Audio(unittest.TestCase):
     def test_resample_length_and_ends(self):
         src = array("h", [0, 1000, 2000, 3000] * 2205).tobytes()  # 0.4 s at 22050

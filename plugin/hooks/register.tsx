@@ -8,7 +8,7 @@ import type { ReadAlongCursor, ReadAlongInfo, ReadAlongSettings, ReadAlongStatus
 // The speech itself is bin/speakd.py, one local service per user that every
 // session shares (so only one voice talks at a time), reached over HTTP on a
 // Unix socket. A voice is `<engine>:<name>` (kokoro:af_heart, win:Microsoft
-// Aria, mac:Samantha, espeak:en-us) or `auto`, the best one installed.
+// Aria, mac:Samantha, espeak:en-us, pocket:me) or `auto`, the best one installed.
 
 const now = atom({ plugin: 'read-along', key: 'now' } as const, null)
 const current = atom({ plugin: 'read-along', key: 'prefs' } as const, null)
@@ -450,7 +450,7 @@ const bar = (fraction: number, width: number) => {
 }
 
 const KOKORO_ACCENTS: Record<string, string> = { a: 'US', b: 'UK', j: 'JP', z: 'ZH', e: 'ES', f: 'FR', h: 'HI', i: 'IT', p: 'PT' }
-const ENGINE_NAMES: Record<string, string> = { kokoro: 'Kokoro', win: 'Windows', mac: 'macOS', espeak: 'eSpeak' }
+const ENGINE_NAMES: Record<string, string> = { kokoro: 'Kokoro', win: 'Windows', mac: 'macOS', espeak: 'eSpeak', pocket: 'Pocket TTS' }
 
 /**
  * A voice's short name, for buttons and the player: kokoro:af_heart → heart,
@@ -460,7 +460,7 @@ const ENGINE_NAMES: Record<string, string> = { kokoro: 'Kokoro', win: 'Windows',
  */
 export const voiceName = (voice = '', isLong = false): string => {
   if (!voice || voice === 'auto') return isLong ? 'auto (best installed)' : 'auto'
-  const [, engine = '', name = ''] = voice.match(/^(kokoro|win|mac|espeak):(.*)$/) ?? ['', voice.includes(' ') ? 'win' : 'kokoro', voice]
+  const [, engine = '', name = ''] = voice.match(/^(kokoro|win|mac|espeak|pocket):(.*)$/) ?? ['', voice.includes(' ') ? 'win' : 'kokoro', voice]
   if (engine === 'kokoro') {
     const short = name.replace(/^[a-z]{2}_/, '')
     return isLong ? `${short} (Kokoro ${KOKORO_ACCENTS[name[0] ?? ''] ?? ''})`.replace(' )', ')') : short

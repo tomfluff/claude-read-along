@@ -13,6 +13,8 @@ is `plugin/`, so the README's media and these notes aren't installed.
   Standard library only, so it runs before anything is installed.
 - `bin/engines.py`: the voice engines and the platform. Standard library
   only; Kokoro's packages are imported lazily.
+- `bin/pocket_worker.py`: Pocket TTS (a voice of one's own), run in its own
+  Python with PyTorch; engines.py talks to it in JSON lines.
 - `bin/setup.py`: installs Kokoro (kokoro-onnx by default) into the data
   folder, or registers an existing Python.
 - `bin/duck.ps1`: lowers other Windows apps' volume (WSL only).

@@ -61,6 +61,12 @@ they run the command themselves (`! <command>` at the prompt).
   Content → System Voice → Manage Voices; the Enhanced and Premium voices are
   free downloads. Windows (from WSL): Settings → Time & language → Speech →
   Add voices.
+- **A voice of their own** (only if the person asks): Pocket TTS clones a
+  voice from a recording. It needs a Python with the `pocket_tts` package
+  (it brings PyTorch; install it apart from read-along) and a folder with one
+  file per voice, a recording or a `.safetensors` voice state. Then
+  `python3 -I <plugin>/bin/setup.py pocket /path/to/python /path/to/voices`,
+  which lists the voices and times one sentence. Voices are `pocket:<file name>`.
 - **Text in Latin script isn't English** (a Spanish or French speaker):
   `python3 -I <plugin>/bin/setup.py language es`.
 

@@ -77,6 +77,7 @@ plays them in place, with their text.
 | macOS voices | macOS | good (Enhanced and Premium voices are better) | built in |
 | Windows voices | WSL | good with the newer "natural" voices | built in |
 | eSpeak NG | Linux, WSL | robotic, but about 100 languages | `sudo apt install espeak-ng` |
+| Pocket TTS (optional) | everywhere | your own voice, cloned from a recording | see [A voice of your own](#a-voice-of-your-own) |
 
 Kokoro speaks English (US and UK), Japanese, Chinese, Spanish, French, Hindi,
 Italian and Portuguese ([its voices](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)).
@@ -166,6 +167,7 @@ A voice is written `engine:name`:
 - `mac:Samantha`, `mac:Ava (Premium)`: macOS
 - `win:Microsoft Aria`: Windows, from WSL
 - `espeak:en-us`, `espeak:he`: eSpeak NG
+- `pocket:me`: a voice of your own, through Pocket TTS (below)
 - `auto`: the best voice installed for the language
 
 The Voices setting gives each language group a list. Latin-script text is
@@ -179,6 +181,25 @@ main=kokoro:af_heart, kokoro:bf_emma, mac:Samantha; ja=kokoro:jf_alpha; he=mac:C
 
 If your Latin-script text isn't English, tell `auto` which language it is:
 `python3 <plugin folder>/bin/setup.py language es`.
+
+### A voice of your own
+
+[Pocket TTS](https://github.com/kyutai-labs/pocket-tts) clones a voice from a
+short recording, and read-along can read with it. It speaks English, French,
+German, Portuguese, Italian and Spanish, about 3 times faster than real time
+on 4 CPU threads. Install it in a Python of its own (it brings PyTorch), put
+your voices in a folder, one file each (a recording, or a `.safetensors` voice
+state from `pocket-tts export-voice`, which loads at once), and point
+read-along at both:
+
+```bash
+python3 <plugin folder>/bin/setup.py pocket /path/to/pocket-tts/python /path/to/voices
+```
+
+Each file is then a voice named after it: `me.safetensors` is `pocket:me`.
+`auto` never picks these voices; choose one with `/read-along voice pocket:me`,
+or put it in a Voices list. Your recordings stay where they are and are read
+only on your machine. `setup.py pocket off` removes them from read-along.
 
 ## Privacy
 
@@ -224,7 +245,7 @@ checked against a pinned SHA-256.
 flowchart LR
     reply["Claude's reply"] --> mod["read-along<br/>(in Claude Code)"]
     mod -- "text" --> service["speech service<br/>(on your machine)"]
-    service -- "a sentence" --> engine["voice<br/>Kokoro · macOS · Windows · eSpeak"]
+    service -- "a sentence" --> engine["voice<br/>Kokoro · macOS · Windows · eSpeak · Pocket TTS"]
     engine -- "audio" --> player["ffplay or SoX"] --> speakers(["your speakers"])
     service -. "the sentence being heard" .-> mod
 ```
@@ -243,4 +264,5 @@ MIT licence; see [LICENSE](LICENSE). Read-along uses, without bundling:
 [misaki](https://github.com/hexgrad/misaki) (Apache-2.0),
 [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx) (MIT),
 [eSpeak NG](https://github.com/espeak-ng/espeak-ng) (GPL-3.0, run as a
-separate program), and FFmpeg or SoX for playback.
+separate program), optionally [Pocket TTS](https://github.com/kyutai-labs/pocket-tts)
+(MIT, run in its own Python), and FFmpeg or SoX for playback.

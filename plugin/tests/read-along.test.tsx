@@ -95,6 +95,7 @@ test('voice names are short, with the engine when long', async () => {
   expect(voiceName('win:Microsoft Zira Desktop', true)).toBe('Zira (Windows)')
   expect(voiceName('mac:Samantha', true)).toBe('Samantha (macOS)')
   expect(voiceName('espeak:en-us', true)).toBe('en-us (eSpeak)')
+  expect(voiceName('pocket:self-warm_conversational', true)).toBe('self-warm_conversational (Pocket TTS)')
   expect(voiceName('auto')).toBe('auto')
   // Names from before engines were named.
   expect(voiceName('af_heart')).toBe('heart')

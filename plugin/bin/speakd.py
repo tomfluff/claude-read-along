@@ -43,7 +43,7 @@ sys.path.insert(0, HERE)  # run with -I, which leaves the script's folder off th
 from engines import GROUP_LANGS, PLATFORM, RATE, Engines, data_dir, log, main_language, read_config, run_powershell, script_of  # noqa: E402
 
 # --ensure replaces a service started from an older copy of these files.
-VERSION = str(max(os.stat(os.path.join(HERE, f)).st_mtime_ns for f in ("speakd.py", "engines.py")))
+VERSION = str(max(os.stat(os.path.join(HERE, f)).st_mtime_ns for f in ("speakd.py", "engines.py", "pocket_worker.py")))
 DEFAULT_SOCKET = f"/tmp/read-along-{os.getuid()}.sock"
 SEC_PER_CHAR_1X = 0.068  # first guess, refined from real synthesis
 LEAD_IN = 0.3  # seconds of silence opening each run
