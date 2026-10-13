@@ -12,6 +12,9 @@
   agreed may be cloned. `auto` never picks Pocket TTS voices.
 - `setup.py kokoro --torch` gets PyTorch's CPU build on Linux without an
   NVIDIA GPU again; it was taking the CUDA build from PyPI.
+- Reset: "reset…" in the settings and `/read-along reset` put this session's
+  choices back to your saved defaults; `/read-along reset defaults` puts the
+  saved settings back to the plugin's own. Both ask first.
 - The settings list the voices in rows by engine, your own voices first, and
   ask the service for them each time, so newly installed voices show up.
 

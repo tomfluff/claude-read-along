@@ -193,6 +193,8 @@ repository and run `claude plugin validate .` in it.
 | `/read-along auto mine on` | also read your own messages |
 | `/read-along auto thinking on` | with auto-read `all`, also read Claude's thinking where it's shown as updates |
 | `/read-along save` | keep this session's choices as the defaults |
+| `/read-along reset` | put this session's choices back to your saved defaults (asks first; also "reset…" in the settings) |
+| `/read-along reset defaults` | put the saved settings back to the plugin's own (says what changes, then asks) |
 | `/read-along doctor` | what works on this machine and what to install |
 | `/read-along setup` | ask Claude to set up the Kokoro voices |
 | `/read-along restart` | restart the speech service |

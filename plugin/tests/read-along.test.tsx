@@ -1,7 +1,7 @@
 import type { Register } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceLabel, voiceName, voiceRows } from '../hooks/register'
+import { factoryDefaults, formatVoices, highlightProps, inlineRuns, layoutTable, markSentence, messageKey, parseVoices, splitAfter, voiceLabel, voiceName, voiceRows } from '../hooks/register'
 
 const REPLY = { text: 'The tmux server survived the forced kill.', isFirstOfReply: true }
 
@@ -344,4 +344,17 @@ test('the settings list voices in rows by engine, your own Pocket TTS voices fir
     ['Kokoro', ['kokoro:af_heart', 'kokoro:bf_emma']],
     ['Pocket TTS', ['pocket:alba']],
   ])
+})
+
+test("the plugin's own defaults come from its manifest's userConfig", async () => {
+  const manifest = JSON.stringify({
+    name: 'read-along',
+    userConfig: { speed: { type: 'number', default: 1.25 }, readCode: { type: 'boolean', default: false }, voices: { type: 'string', default: 'auto' }, other: { type: 'string' } },
+  })
+  expect(factoryDefaults(manifest)).toEqual([
+    ['speed', 1.25],
+    ['readCode', false],
+    ['voices', 'auto'],
+  ])
+  expect(factoryDefaults('{}')).toEqual([])
 })

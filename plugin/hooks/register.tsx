@@ -17,6 +17,7 @@ const machine = atom({ plugin: 'read-along', key: 'info' } as const, null)
 const browsing = atom({ plugin: 'read-along', key: 'browsing' } as const, null)
 const installed = atom({ plugin: 'read-along', key: 'voices' } as const, null)
 const bandCheck = atom({ plugin: 'read-along', key: 'bandCheck' } as const, 0)
+const confirmReset = atom({ plugin: 'read-along', key: 'confirmReset' } as const, false)
 
 const PANE = 'read-along'
 const SPEED_STEP = 0.25
@@ -401,6 +402,48 @@ async function saveDefaults($: $) {
     if (deny) refused.push(`${field} (${deny})`)
   }
   return refused.length ? `Not saved: ${refused.join(', ')}` : 'Saved as the defaults for new sessions.'
+}
+
+/** This session's choices back to the saved defaults; a read in progress takes them at once. */
+async function resetSession($: $) {
+  await update($, current, () => null)
+  const s = await settings($)
+  if (await read($, now)) await show($, await call($, '/set', { voices: s.voices, speed: s.speed, volume: s.volume / 100, duck: duckLevel(s.duckOthers) }))
+  return 'This session is back to your saved defaults.'
+}
+
+type SavedValue = string | number | boolean
+
+/** The plugin's own defaults for its saved settings, from its manifest's userConfig. */
+export const factoryDefaults = (manifest: string): [string, SavedValue][] =>
+  Object.entries((JSON.parse(manifest) as { userConfig?: Record<string, { default?: unknown }> }).userConfig ?? {}).flatMap(([key, field]) =>
+    ['string', 'number', 'boolean'].includes(typeof field.default) ? [[key, field.default as SavedValue] as [string, SavedValue]] : [],
+  )
+
+/**
+ * /read-along reset defaults: every saved setting back to the plugin's own
+ * default, and this session with them. Without `isConfirmed` it only says
+ * what would change and how to confirm.
+ */
+async function resetDefaults($: $, isConfirmed: boolean) {
+  const all = factoryDefaults(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`))
+  const changes = all.filter(([key, value]) => opt[key] !== undefined && opt[key] !== value)
+  if (!changes.length) return 'Your saved settings are already the defaults.'
+  if (!isConfirmed) {
+    return [
+      "This puts read-along's saved settings back to the plugin's defaults, and this session with them:",
+      ...changes.map(([key, value]) => `  ${key}: ${String(opt[key])} → ${String(value)}`),
+      '',
+      'To do it: /read-along reset defaults yes',
+    ].join('\n')
+  }
+  const refused: string[] = []
+  for (const [key, value] of changes) {
+    const { deny } = await $.config.set({ key: `read-along.${key}`, value })
+    if (deny) refused.push(`${key} (${deny})`)
+  }
+  await resetSession($)
+  return refused.length ? `Not reset: ${refused.join(', ')}` : 'Saved settings are back to the defaults, and so is this session.'
 }
 
 /** /read-along doctor: what works on this machine and what to install. */
@@ -1082,6 +1125,8 @@ const HELP = [
   '/read-along voices [GROUP]  list the installed voices',
   '/read-along auto replies off|final|all, auto mine on|off, auto thinking on|off',
   "/read-along save            make this session's choices the defaults",
+  "/read-along reset           this session's choices back to the saved defaults (asks first)",
+  "/read-along reset defaults  the saved settings back to the plugin's own (asks first)",
   '/read-along doctor          what works on this machine, and what to install',
   '/read-along setup           ask Claude to install the voices',
   '/read-along restart         restart the speech service',
@@ -1095,8 +1140,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'read-along',
-      description: 'Read-along: open its settings, or read | stop | pause | speed N | voice NAME | voices | auto … | save | doctor | setup | restart | help',
-      argumentHint: '[read|stop|pause|speed N|voice NAME|voices|auto …|save|doctor|setup|restart|help]',
+      description: 'Read-along: open its settings, or read | stop | pause | speed N | voice NAME | voices | auto … | save | reset | doctor | setup | restart | help',
+      argumentHint: '[read|stop|pause|speed N|voice NAME|voices|auto …|save|reset [defaults]|doctor|setup|restart|help]',
     })
     ticker?.cancel()
     ticker = $.clock.every(400, () => tick($))
@@ -1226,6 +1271,15 @@ export const register: Register = (on, options) => {
       }
       case 'save':
         return { text: await saveDefaults($) }
+      case 'reset': {
+        const isDefaults = rest[0] === 'defaults'
+        const isConfirmed = rest[isDefaults ? 1 : 0] === 'yes'
+        if (isDefaults) return { text: await resetDefaults($, isConfirmed) }
+        if (!isConfirmed) {
+          return { text: "This puts this session's choices (voices, speed, volume, auto-read) back to your saved defaults.\nTo do it: /read-along reset yes" }
+        }
+        return { text: await resetSession($) }
+      }
       case 'doctor':
         return { text: await doctor($) }
       case 'setup': {
@@ -1309,6 +1363,7 @@ export const register: Register = (on, options) => {
     const info = await read($, machine)
     const open = await read($, browsing)
     const all = (await read($, installed)) ?? []
+    const isAsking = await read($, confirmReset)
     const lists = favourites()
     const pick = (isOn: boolean) => (isOn ? ('primary' as const) : undefined)
     // Main, plus every group with a voice set; the rest are a click away.
@@ -1400,7 +1455,25 @@ export const register: Register = (on, options) => {
           <Button key="save" variant="primary" label="save as defaults" onPress={async () => $.ui.toast(await saveDefaults($))} />
           <Button key="read-last" label="▶ read last reply" onPress={() => readLast($)} />
           <Button key="stop" label="■ stop" onPress={() => control($, 'stop')} />
+          <Button key="reset" label="reset…" onPress={() => update($, confirmReset, () => true)} />
         </Box>
+        {isAsking
+          ? [
+              <Box key="reset-ask" columnGap={1}>
+                <Text>Reset this session's choices to your saved defaults?</Text>
+                <Button
+                  key="reset-yes"
+                  variant="primary"
+                  label="yes, reset"
+                  onPress={async () => {
+                    await update($, confirmReset, () => false)
+                    $.ui.toast(await resetSession($))
+                  }}
+                />
+                <Button key="reset-no" label="cancel" onPress={() => update($, confirmReset, () => false)} />
+              </Box>,
+            ]
+          : []}
         <Box columnGap={1}>
           <Text bold>Player</Text>
           {['band', 'hint', 'message', 'band+message'].map(v => (
@@ -1408,7 +1481,7 @@ export const register: Register = (on, options) => {
           ))}
         </Box>
         <Text dimColor>
-          Choices here last for this session until you save them. Voice lists, the highlight, icons and the message buttons are in /config under read-along. /read-along doctor checks this machine.
+          Choices here last for this session until you save them. Voice lists, the highlight, icons and the message buttons are in /config under read-along. /read-along reset defaults puts the saved settings back to the plugin's own. /read-along doctor checks this machine.
         </Text>
       </Box>
     )
